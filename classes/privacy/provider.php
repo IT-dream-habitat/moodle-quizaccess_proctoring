@@ -411,14 +411,22 @@ class provider implements
         $DB->set_field_select('quizaccess_proctoring_logs', 'userid', 0, "userid = :userid", $params);
         $DB->set_field_select('quizaccess_proctoring_screenshot_logs', 'userid', 0, "userid = :userid", $params);
         $DB->set_field_select('quizaccess_proctoring_tabswitch_logs', 'userid', 0, "userid = :userid", $params);
+
+        $fs = get_file_storage();
         foreach ($contextlist as $context) {
-            // Delete user file (webcam images and screenshots).
-            $userfiles = $DB->get_records('files', $params);
-            $fs = get_file_storage();
-            foreach ($userfiles as $file):
-                $fs->delete_area_files($context->id, 'quizaccess_proctoring', 'picture', $file->itemid);
-                $fs->delete_area_files($context->id, 'quizaccess_proctoring', 'screenshot', $file->itemid);
-            endforeach;
+            // Only this plugin's own files in this context - the 'picture' and 'screenshot'
+            // fileareas are independent itemid sequences (log table ids), so an itemid from
+            // one can coincidentally match an unrelated file's itemid in the other; always use
+            // the file's own filearea rather than trying both for every itemid found.
+            $fileparams = [
+                'contextid' => $context->id,
+                'component' => 'quizaccess_proctoring',
+                'userid' => $contextlist->get_user()->id,
+            ];
+            $userfiles = $DB->get_records('files', $fileparams);
+            foreach ($userfiles as $file) {
+                $fs->delete_area_files($context->id, 'quizaccess_proctoring', $file->filearea, $file->itemid);
+            }
         }
     }
 
