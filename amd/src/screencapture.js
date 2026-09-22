@@ -12,6 +12,9 @@ define(['jquery', 'core/ajax', 'core/notification', 'core/str'],
                 {key: 'screenshareended', component: 'quizaccess_proctoring'},
                 {key: 'wrong_during_taking_screencapture', component: 'quizaccess_proctoring'},
                 {key: 'sharescreenbutton', component: 'quizaccess_proctoring'},
+                {key: 'sharescreentitle', component: 'quizaccess_proctoring'},
+                {key: 'sharescreeninstructions', component: 'quizaccess_proctoring'},
+                {key: 'sharescreenskip', component: 'quizaccess_proctoring'},
             ];
             try {
                 const strings = await Str.get_strings(stringkeys);
@@ -21,6 +24,9 @@ define(['jquery', 'core/ajax', 'core/notification', 'core/str'],
                     screenshareended: strings[2],
                     wrongduringtakingscreencapture: strings[3],
                     sharescreenbutton: strings[4],
+                    sharescreentitle: strings[5],
+                    sharescreeninstructions: strings[6],
+                    sharescreenskip: strings[7],
                 };
             } catch (error) {
                 Notification.exception(error);
@@ -102,23 +108,42 @@ define(['jquery', 'core/ajax', 'core/notification', 'core/str'],
 
                 // getDisplayMedia() requires a genuine, direct user gesture in every major
                 // browser - unlike getUserMedia(), it cannot be requested automatically when
-                // the page loads (browsers silently refuse it with no prompt at all). Show a
-                // button the student must click to grant it; if they never click it, or the
-                // picker is declined, screen capture simply stays off for this attempt - the
-                // soft requirement still holds either way.
-                const prompt = document.createElement('div');
-                prompt.className = 'proctoring-screenshare-prompt';
-                const button = document.createElement('button');
-                button.type = 'button';
-                button.className = 'btn btn-primary';
-                button.textContent = strings.sharescreenbutton;
-                prompt.appendChild(button);
-                document.body.appendChild(prompt);
+                // the page loads (browsers silently refuse it with no prompt at all, unlike a
+                // declined permission). There is no way around that click. To make it as hard
+                // to miss as possible (and as close to the camera's automatic-looking prompt as
+                // the platform allows), show a full-screen overlay the instant this page loads,
+                // rather than a small easy-to-ignore corner button. A "skip" option is required
+                // so the soft requirement still holds - the student must always be able to
+                // continue their attempt even if they never grant screen sharing.
+                const overlay = document.createElement('div');
+                overlay.className = 'proctoring-screenshare-overlay';
+                overlay.innerHTML = `
+                    <div class="proctoring-screenshare-dialog">
+                        <h3>${strings.sharescreentitle}</h3>
+                        <p>${strings.sharescreeninstructions}</p>
+                        <button type="button" class="btn btn-primary proctoring-screenshare-share">
+                            ${strings.sharescreenbutton}
+                        </button>
+                        <button type="button" class="btn btn-link proctoring-screenshare-skip">
+                            ${strings.sharescreenskip}
+                        </button>
+                    </div>`;
+                document.body.appendChild(overlay);
 
-                button.addEventListener('click', async function() {
-                    prompt.remove();
+                overlay.querySelector('.proctoring-screenshare-skip').addEventListener('click', function() {
+                    overlay.remove();
+                }, {once: true});
+
+                overlay.querySelector('.proctoring-screenshare-share').addEventListener('click', async function() {
+                    overlay.remove();
                     try {
-                        const stream = await navigator.mediaDevices.getDisplayMedia({video: true});
+                        // displaySurface: 'monitor' hints the browser to default the picker
+                        // towards "Entire Screen" rather than a single window/tab - it's only
+                        // a preference the browser may use for its default selection, never a
+                        // guarantee, since the human always keeps the final choice.
+                        const stream = await navigator.mediaDevices.getDisplayMedia({
+                            video: {displaySurface: 'monitor'}
+                        });
                         video.srcObject = stream;
                         await video.play();
                         screenShareActive = true;
