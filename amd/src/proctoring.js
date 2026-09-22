@@ -406,7 +406,19 @@ define(['jquery', 'core/ajax', 'core/notification', 'core/str'],
                     }
                 }
 
-                await startup();
+                // Defer requesting the webcam until the student actually clicks "Attempt quiz now"
+                // (the button that opens the preflight confirmation modal), rather than requesting
+                // it as soon as the quiz activity page loads. The preflight form's video/canvas/photo
+                // elements are already present in the page (hidden inside that modal) at this point,
+                // which is why startup() used to fire immediately.
+                const startbutton = document.querySelector('.quizstartbuttondiv [type="submit"]');
+                if (startbutton) {
+                    startbutton.addEventListener('click', function() {
+                        startup();
+                    }, {once: true});
+                }
+                // If there's no "attempt quiz" trigger on this page (e.g. attempts aren't
+                // currently allowed), there's nothing to defer to and no camera to request.
 
                 return data;
             },
