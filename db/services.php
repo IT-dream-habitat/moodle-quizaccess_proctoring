@@ -51,4 +51,26 @@ $functions = [
         'capabilities' => 'quizaccess/proctoring:sendcamshot',
         'services'     => [MOODLE_OFFICIAL_MOBILE_SERVICE],
     ],
+
+    // Send a screen (desktop) capture on the given session.
+    'quizaccess_proctoring_send_screenshot' => [
+        'classname'    => 'quizaccess_proctoring_external',
+        'methodname'   => 'send_screenshot',
+        'description'  => 'Send a screen capture on the given session.',
+        'type'         => 'write',
+        'ajax'         => true,
+        'capabilities' => 'quizaccess/proctoring:sendscreenshot',
+        'services'     => [MOODLE_OFFICIAL_MOBILE_SERVICE],
+    ],
+
+    // Log a tab-switch/focus-loss violation event.
+    'quizaccess_proctoring_log_tabswitch' => [
+        'classname'    => 'quizaccess_proctoring_external',
+        'methodname'   => 'log_tabswitch',
+        'description'  => 'Log a tab-switch or focus-loss violation event.',
+        'type'         => 'write',
+        'ajax'         => true,
+        'capabilities' => 'quizaccess/proctoring:sendtabswitchevent',
+        'services'     => [MOODLE_OFFICIAL_MOBILE_SERVICE],
+    ],
 ];

@@ -85,6 +85,9 @@
             <th>{{#str}}email,quizaccess_proctoring{{/str}}</th>
             <th>{{#str}}dateverified,quizaccess_proctoring{{/str}}</th>
             <th>{{#str}}identity_mismatch_label,quizaccess_proctoring{{/str}}</th>
+            {{#enabletabswitchdetection}}
+            <th>{{#str}}violationscount,quizaccess_proctoring{{/str}}</th>
+            {{/enabletabswitchdetection}}
             <th>{{#str}}actions,quizaccess_proctoring{{/str}}</th>
         </tr>
     </thead>
@@ -96,12 +99,15 @@
         <td>{{timemodified}}</td>
         <td>
             {{#warningicon}}
-                {{#str}}notfoundtext,quizaccess_proctoring{{/str}}         
+                {{#str}}notfoundtext,quizaccess_proctoring{{/str}}
             {{/warningicon}}
              {{^warningicon}}
-                {{#str}}foundtext,quizaccess_proctoring{{/str}}        
+                {{#str}}foundtext,quizaccess_proctoring{{/str}}
             {{/warningicon}}
         </td>
+        {{#enabletabswitchdetection}}
+        <td>{{violationscount}}</td>
+        {{/enabletabswitchdetection}}
         <td>
             {{{actionmenu}}}
         </td>

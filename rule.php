@@ -437,6 +437,38 @@ class quizaccess_proctoring extends quizaccess_proctoring_parent_class_alias {
 
             // Initialise the proctoring setup with JavaScript.
             $page->requires->js_call_amd('quizaccess_proctoring/proctoring', 'setup', [$record, $modelurl]);
+
+            // Screen capture is a soft requirement: declining or stopping it never blocks the attempt.
+            if (get_config('quizaccess_proctoring', 'enablescreencapture')) {
+                $screenshotdelay = (int)get_config('quizaccess_proctoring', 'autoreconfigurescreenshotdelay') * 1000 ?: 30000;
+                $screenshotwidth = (int)get_config('quizaccess_proctoring', 'autoreconfigurescreenshotwidth') ?: 230;
+
+                $screenshotrecord = (object)[
+                    'courseid' => $COURSE->id,
+                    'quizid' => $contextquiz->id,
+                    'userid' => $USER->id,
+                    'screenshotpicture' => '',
+                    'captureorigin' => 'interval',
+                    'tabswitchid' => 0,
+                    'status' => 0,
+                    'timemodified' => time(),
+                ];
+                $screenshotrecord->id = $DB->insert_record('quizaccess_proctoring_screenshot_logs', $screenshotrecord);
+                $screenshotrecord->screenshotdelay = $screenshotdelay;
+                $screenshotrecord->image_width = $screenshotwidth;
+
+                $page->requires->js_call_amd('quizaccess_proctoring/screencapture', 'init', [$screenshotrecord]);
+            }
+
+            // Tab-switch/focus-loss detection.
+            if (get_config('quizaccess_proctoring', 'enabletabswitchdetection')) {
+                $tabswitchrecord = (object)[
+                    'courseid' => $COURSE->id,
+                    'quizid' => $contextquiz->id,
+                    'attemptid' => $attempt,
+                ];
+                $page->requires->js_call_amd('quizaccess_proctoring/tabswitch', 'init', [$tabswitchrecord]);
+            }
         }
     }
 

@@ -67,6 +67,36 @@ class provider implements
             'privacy:metadata:quizaccess_proctoring_logs'
         );
 
+        $quizaccessproctoringscreenshotlogs = [
+            'courseid' => 'privacy:metadata:courseid',
+            'quizid' => 'privacy:metadata:quizid',
+            'userid' => 'privacy:metadata:userid',
+            'screenshotpicture' => 'privacy:metadata:screenshotpicture',
+            'captureorigin' => 'privacy:metadata:captureorigin',
+            'timemodified' => 'timemodified',
+        ];
+
+        $collection->add_database_table(
+            'quizaccess_proctoring_screenshot_logs',
+            $quizaccessproctoringscreenshotlogs,
+            'privacy:metadata:quizaccess_proctoring_screenshot_logs'
+        );
+
+        $quizaccessproctoringtabswitchlogs = [
+            'courseid' => 'privacy:metadata:courseid',
+            'quizid' => 'privacy:metadata:quizid',
+            'userid' => 'privacy:metadata:userid',
+            'eventtype' => 'privacy:metadata:eventtype',
+            'starttime' => 'privacy:metadata:starttime',
+            'duration' => 'privacy:metadata:duration',
+        ];
+
+        $collection->add_database_table(
+            'quizaccess_proctoring_tabswitch_logs',
+            $quizaccessproctoringtabswitchlogs,
+            'privacy:metadata:quizaccess_proctoring_tabswitch_logs'
+        );
+
         $collection->add_subsystem_link(
             'core_files',
             [],
@@ -93,6 +123,23 @@ class provider implements
               GROUP BY c.id";
         $contextlist = new contextlist();
         $contextlist->add_from_sql($sql, $params);
+
+        // Context in Quizaccess proctoring screenshot logs.
+        $sqlscreenshot = "SELECT DISTINCT c.id
+                  FROM {quizaccess_proctoring_screenshot_logs} qpsl
+                  JOIN {context} c ON c.instanceid = qpsl.quizid AND c.contextlevel = :context
+                  WHERE qpsl.userid = :userid
+              GROUP BY c.id";
+        $contextlist->add_from_sql($sqlscreenshot, $params);
+
+        // Context in Quizaccess proctoring tab-switch logs.
+        $sqltabswitch = "SELECT DISTINCT c.id
+                  FROM {quizaccess_proctoring_tabswitch_logs} qptl
+                  JOIN {context} c ON c.instanceid = qptl.quizid AND c.contextlevel = :context
+                  WHERE qptl.userid = :userid
+              GROUP BY c.id";
+        $contextlist->add_from_sql($sqltabswitch, $params);
+
         $fileparams = ['component' => 'quizaccess_proctoring', 'userid' => $userid];
 
         $sqlfile = "SELECT DISTINCT contextid as id
@@ -118,6 +165,18 @@ class provider implements
                  WHERE cm.id = ?";
         $params = [$context->instanceid];
         $userlist->add_from_sql('userid', $sql, $params);
+
+        $sqlscreenshot = "SELECT DISTINCT qpsl.userid AS userid
+                  FROM {quizaccess_proctoring_screenshot_logs} qpsl
+                  JOIN {course_modules} cm ON cm.id = qpsl.quizid
+                 WHERE cm.id = ?";
+        $userlist->add_from_sql('userid', $sqlscreenshot, $params);
+
+        $sqltabswitch = "SELECT DISTINCT qptl.userid AS userid
+                  FROM {quizaccess_proctoring_tabswitch_logs} qptl
+                  JOIN {course_modules} cm ON cm.id = qptl.quizid
+                 WHERE cm.id = ?";
+        $userlist->add_from_sql('userid', $sqltabswitch, $params);
 
         $fileparams = ['component' => 'quizaccess_proctoring', 'contextid' => $context->id];
         $sqlfile = "SELECT DISTINCT userid
@@ -186,6 +245,72 @@ class provider implements
                     }
 
                 }
+
+                $screenshotfields = 'id, courseid, quizid, userid, screenshotpicture, captureorigin, timemodified';
+                $qapscreenshots = $DB->get_records_select(
+                    'quizaccess_proctoring_screenshot_logs', $select, $params, '', $screenshotfields);
+
+                $index = 0;
+                foreach ($qapscreenshots as $qapscreenshot) {
+                    $index++;
+                    $subcontext = [
+                        get_string('quizaccess_proctoring', 'quizaccess_proctoring'),
+                        'proctoring_screenshot_logs',
+                        $index,
+                    ];
+
+                    $data = (object)[
+                        'id' => $qapscreenshot->id,
+                        'courseid' => $qapscreenshot->courseid,
+                        'quizid' => $qapscreenshot->quizid,
+                        'userid' => $qapscreenshot->userid,
+                        'screenshotpicture' => $qapscreenshot->screenshotpicture,
+                        'captureorigin' => $qapscreenshot->captureorigin,
+                        'timemodified' => transform::datetime($qapscreenshot->timemodified),
+                    ];
+
+                    $screenshotpicparts = explode("/", "$qapscreenshot->screenshotpicture");
+                    $screenshotpiclast = end($screenshotpicparts);
+                    $paramfile = ['userid' => $qapscreenshot->userid, 'filename' => $screenshotpiclast];
+                    if (!empty($screenshotpiclast)) {
+                        $userfiles = $DB->get_record('files', $paramfile);
+                        writer::with_context($context)
+                            ->export_area_files([get_string('privacy:core_files', 'quizaccess_proctoring')],
+                                'quizaccess_proctoring', 'screenshot', $userfiles->itemid
+                            )->export_data($subcontext, $data);
+                    } else {
+                        writer::with_context($context)
+                            ->export_data($subcontext, $data);
+                    }
+                }
+
+                $tabswitchfields = 'id, courseid, quizid, userid, attemptid, eventtype, starttime, duration, timecreated';
+                $qaptabswitches = $DB->get_records_select(
+                    'quizaccess_proctoring_tabswitch_logs', $select, $params, '', $tabswitchfields);
+
+                $index = 0;
+                foreach ($qaptabswitches as $qaptabswitch) {
+                    $index++;
+                    $subcontext = [
+                        get_string('quizaccess_proctoring', 'quizaccess_proctoring'),
+                        'proctoring_tabswitch_logs',
+                        $index,
+                    ];
+
+                    $data = (object)[
+                        'id' => $qaptabswitch->id,
+                        'courseid' => $qaptabswitch->courseid,
+                        'quizid' => $qaptabswitch->quizid,
+                        'userid' => $qaptabswitch->userid,
+                        'attemptid' => $qaptabswitch->attemptid,
+                        'eventtype' => $qaptabswitch->eventtype,
+                        'starttime' => transform::datetime($qaptabswitch->starttime),
+                        'duration' => $qaptabswitch->duration,
+                        'timecreated' => transform::datetime($qaptabswitch->timecreated),
+                    ];
+
+                    writer::with_context($context)->export_data($subcontext, $data);
+                }
             }
         }
     }
@@ -206,11 +331,14 @@ class provider implements
 
             $params['quizid'] = $quizid;
             $DB->set_field_select('quizaccess_proctoring_logs', 'userid', 0, "quizid = :quizid", $params);
+            $DB->set_field_select('quizaccess_proctoring_screenshot_logs', 'userid', 0, "quizid = :quizid", $params);
+            $DB->set_field_select('quizaccess_proctoring_tabswitch_logs', 'userid', 0, "quizid = :quizid", $params);
         }
 
-        // Delete all of the webcam images for this user.
+        // Delete all of the webcam images and screenshots for this user.
         $fs = get_file_storage();
         $fs->delete_area_files($context->id, 'quizaccess_proctoring', 'picture');
+        $fs->delete_area_files($context->id, 'quizaccess_proctoring', 'screenshot');
     }
 
     /**
@@ -231,31 +359,35 @@ class provider implements
         $userids = $userlist->get_userids();
         list($insql, $inparams) = $DB->get_in_or_equal($userids, SQL_PARAMS_NAMED);
 
-        // Anonymize quizaccess_proctoring_logs entries.
+        // Anonymize quizaccess_proctoring_logs, screenshot and tab-switch entries.
         $DB->set_field_select('quizaccess_proctoring_logs', 'userid', 0, "userid {$insql}", $inparams);
+        $DB->set_field_select('quizaccess_proctoring_screenshot_logs', 'userid', 0, "userid {$insql}", $inparams);
+        $DB->set_field_select('quizaccess_proctoring_tabswitch_logs', 'userid', 0, "userid {$insql}", $inparams);
 
-        // Delete users' webcam images using Moodle File API.
+        // Delete users' webcam images and screenshots using Moodle File API.
         $fs = get_file_storage();
 
-        $params = array_merge([
-            'contextid' => $context->id,
-            'component' => 'quizaccess_proctoring',
-            'filearea' => 'picture',
-        ], $inparams);
+        foreach (['picture', 'screenshot'] as $filearea) {
+            $params = array_merge([
+                'contextid' => $context->id,
+                'component' => 'quizaccess_proctoring',
+                'filearea' => $filearea,
+            ], $inparams);
 
-        $sql = "SELECT *
-                  FROM {files}
-                 WHERE contextid = :contextid
-                   AND component = :component
-                   AND filearea = :filearea
-                   AND userid {$insql}";
+            $sql = "SELECT *
+                      FROM {files}
+                     WHERE contextid = :contextid
+                       AND component = :component
+                       AND filearea = :filearea
+                       AND userid {$insql}";
 
-        $files = $DB->get_records_sql($sql, $params);
+            $files = $DB->get_records_sql($sql, $params);
 
-        foreach ($files as $file) {
-            $storedfile = $fs->get_file_instance($file);
-            if ($storedfile) {
-                $storedfile->delete();
+            foreach ($files as $file) {
+                $storedfile = $fs->get_file_instance($file);
+                if ($storedfile) {
+                    $storedfile->delete();
+                }
             }
         }
     }
@@ -277,12 +409,15 @@ class provider implements
 
         $params['userid'] = $contextlist->get_user()->id;
         $DB->set_field_select('quizaccess_proctoring_logs', 'userid', 0, "userid = :userid", $params);
+        $DB->set_field_select('quizaccess_proctoring_screenshot_logs', 'userid', 0, "userid = :userid", $params);
+        $DB->set_field_select('quizaccess_proctoring_tabswitch_logs', 'userid', 0, "userid = :userid", $params);
         foreach ($contextlist as $context) {
-            // Delete user file (webcam images).
+            // Delete user file (webcam images and screenshots).
             $userfiles = $DB->get_records('files', $params);
             $fs = get_file_storage();
             foreach ($userfiles as $file):
                 $fs->delete_area_files($context->id, 'quizaccess_proctoring', 'picture', $file->itemid);
+                $fs->delete_area_files($context->id, 'quizaccess_proctoring', 'screenshot', $file->itemid);
             endforeach;
         }
     }

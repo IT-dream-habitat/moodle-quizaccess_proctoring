@@ -80,6 +80,30 @@ if ($hassiteconfig) {
         get_string('setting:camshotwidth', 'quizaccess_proctoring'),
         get_string('setting:camshotwidth_desc', 'quizaccess_proctoring'), 230, PARAM_INT));
 
+    // Screen capture and tab-switch detection settings. Off by default: screen capture in particular
+    // can record far more than the exam window, so enabling it is a policy decision for the institution.
+    $settings->add(new admin_setting_description(
+        'quizaccess_proctoring/screencaptureprivacynotice',
+        '',
+        get_string('setting:screencaptureprivacynotice', 'quizaccess_proctoring')
+    ));
+
+    $settings->add(new admin_setting_configcheckbox('quizaccess_proctoring/enablescreencapture',
+        get_string('setting:enablescreencapture', 'quizaccess_proctoring'),
+        get_string('setting:enablescreencapture_desc', 'quizaccess_proctoring'), 0));
+
+    $settings->add(new admin_setting_configtext('quizaccess_proctoring/autoreconfigurescreenshotdelay',
+        get_string('setting:screenshotdelay', 'quizaccess_proctoring'),
+        get_string('setting:screenshotdelay_desc', 'quizaccess_proctoring'), 30, PARAM_INT));
+
+    $settings->add(new admin_setting_configtext('quizaccess_proctoring/autoreconfigurescreenshotwidth',
+        get_string('setting:screenshotwidth', 'quizaccess_proctoring'),
+        get_string('setting:screenshotwidth_desc', 'quizaccess_proctoring'), 230, PARAM_INT));
+
+    $settings->add(new admin_setting_configcheckbox('quizaccess_proctoring/enabletabswitchdetection',
+        get_string('setting:enabletabswitchdetection', 'quizaccess_proctoring'),
+        get_string('setting:enabletabswitchdetection_desc', 'quizaccess_proctoring'), 0));
+
     // Face recognition method choice.
     $choices = [
         'BS' => 'BS',

@@ -101,11 +101,11 @@
             <tbody id = "proctoring-table-body"  >
                 {{#data}}
                 <tr class="p-0 m-0">
-                    <td class="p-0 m-0">{{name}}</td>
+                    <td class="p-0 m-0">{{name}}{{#isviolation}} <span class="badge badge-danger">{{#str}}violationcaptured, quizaccess_proctoring{{/str}}</span>{{/isviolation}}</td>
                     <td class="p-0 m-0">
                         {{#image_url}}
                             <a href="{{image_url}}" data-lightbox="proc-images" data-title="{{name}}">
-                                <img id="{{img_id}}" class="proctoring-border-color-{{border_color}}"  width="100" 
+                                <img id="{{img_id}}" class="proctoring-border-color-{{border_color}} proctoring-capture-{{capturekind}} {{#isviolation}}proctoring-origin-violation{{/isviolation}}"  width="100"
                                     src="{{image_url}}" alt="{{name}}" data-lightbox="{{lightbox_data}}">
                             </a>
                         {{/image_url}}
@@ -116,6 +116,53 @@
             </table>
         </div>
     </div>
+
+    {{#enabletabswitchdetection}}
+    <div class="row no-gutters mt-3">
+        <div class="col-12">
+            <h3>{{#str}}violationstimeline, quizaccess_proctoring{{/str}}</h3>
+            {{#hasviolations}}
+            <table class="generaltable generalbox reporttable" cellpadding="0" cellspacing="0">
+                <thead>
+                    <tr>
+                        <th>{{#str}}violationtype, quizaccess_proctoring{{/str}}</th>
+                        <th>{{#str}}dateverified, quizaccess_proctoring{{/str}}</th>
+                        <th>{{#str}}violationduration, quizaccess_proctoring{{/str}}</th>
+                        <th>{{#str}}webcampicture, quizaccess_proctoring{{/str}}</th>
+                        <th>{{#str}}screenshotpicture, quizaccess_proctoring{{/str}}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{#violations}}
+                    <tr>
+                        <td>{{eventtype}}</td>
+                        <td>{{starttime}}</td>
+                        <td>{{duration}}s</td>
+                        <td>
+                            {{#camshoturl}}
+                                <a href="{{camshoturl}}" data-lightbox="proc-images" data-title="{{eventtype}}">
+                                    <img width="80" src="{{camshoturl}}" alt="{{eventtype}}">
+                                </a>
+                            {{/camshoturl}}
+                        </td>
+                        <td>
+                            {{#screenshoturl}}
+                                <a href="{{screenshoturl}}" data-lightbox="proc-images" data-title="{{eventtype}}">
+                                    <img width="80" src="{{screenshoturl}}" alt="{{eventtype}}">
+                                </a>
+                            {{/screenshoturl}}
+                        </td>
+                    </tr>
+                    {{/violations}}
+                </tbody>
+            </table>
+            {{/hasviolations}}
+            {{^hasviolations}}
+            <div class="alert alert-info" role="alert">{{#str}}noviolations, quizaccess_proctoring{{/str}}</div>
+            {{/hasviolations}}
+        </div>
+    </div>
+    {{/enabletabswitchdetection}}
 </div>
 
 </div>

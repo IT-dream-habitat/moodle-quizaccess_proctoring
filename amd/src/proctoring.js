@@ -1,5 +1,8 @@
 // @SuppressWarnings("javascript:S4144");
 let isCameraAllowed = false;
+// Set by setup() once the live attempt-page capture loop is running, so captureNow() can
+// trigger an out-of-band capture (e.g. from a tab-switch violation) using the same video stream.
+let activeTakePicture = null;
 
 define(['jquery', 'core/ajax', 'core/notification', 'core/str'],
     function($, Ajax, Notification, Str) {
@@ -173,7 +176,7 @@ define(['jquery', 'core/ajax', 'core/notification', 'core/str'],
                     photo.setAttribute('src', data);
                 };
 
-                const takepicture = async() => {
+                const takepicture = async(captureorigin, tabswitchid) => {
                     const context = canvas.getContext('2d');
                     if (width && height) {
                         canvas.width = width;
@@ -212,6 +215,8 @@ define(['jquery', 'core/ajax', 'core/notification', 'core/str'],
                             'parenttype': 'camshot_image',
                             'faceimage': faceImage,
                             'facefound': faceFound,
+                            'captureorigin': captureorigin || 'interval',
+                            'tabswitchid': tabswitchid || 0,
                         };
 
                         var request = {
@@ -233,6 +238,7 @@ define(['jquery', 'core/ajax', 'core/notification', 'core/str'],
                         clearphoto();
                     }
                 };
+                activeTakePicture = takepicture;
 
                 navigator.mediaDevices.getUserMedia({video: true, audio: false})
                     // eslint-disable-next-line promise/always-return
@@ -403,6 +409,23 @@ define(['jquery', 'core/ajax', 'core/notification', 'core/str'],
                 await startup();
 
                 return data;
+            },
+
+            /**
+             * Capture a single webcam photo immediately, outside the normal interval loop.
+             * Used by the tab-switch module to capture evidence at the moment of a violation.
+             * Operates on the live video stream started by setup() on the attempt page; a no-op
+             * if the camera was never granted or setup() has not run.
+             *
+             * @param {string} captureorigin Either 'interval' or 'violation'.
+             * @param {number} tabswitchid Linked quizaccess_proctoring_tabswitch_logs id.
+             * @return {Promise}
+             */
+            captureNow(captureorigin, tabswitchid) {
+                if (!isCameraAllowed || !activeTakePicture) {
+                    return Promise.resolve();
+                }
+                return activeTakePicture(captureorigin, tabswitchid);
             }
         };
     });

@@ -56,9 +56,13 @@ class quizaccess_proctoring_external extends external_api {
                 'quizid' => new external_value(PARAM_INT, 'screenshot quiz id'),
                 'webcampicture' => new external_value(PARAM_RAW, 'webcam photo'),
                 'imagetype' => new external_value(PARAM_INT, 'image type'),
-                'parenttype' => new external_value(PARAM_RAW, 'Face image parent type'),
-                'faceimage' => new external_value(PARAM_RAW, 'Face Image'),
-                'facefound' => new external_value(PARAM_INT, 'Face found flag'),
+                'parenttype' => new external_value(PARAM_RAW, 'Face image parent type', VALUE_DEFAULT, ''),
+                'faceimage' => new external_value(PARAM_RAW, 'Face Image', VALUE_DEFAULT, ''),
+                'facefound' => new external_value(PARAM_INT, 'Face found flag', VALUE_DEFAULT, 0),
+                'captureorigin' => new external_value(
+                    PARAM_ALPHA, 'Whether this was an interval or violation capture', VALUE_DEFAULT, 'interval'),
+                'tabswitchid' => new external_value(
+                    PARAM_INT, 'Linked quizaccess_proctoring_tabswitch_logs id, 0 if none', VALUE_DEFAULT, 0),
             ]
         );
     }
@@ -89,8 +93,9 @@ class quizaccess_proctoring_external extends external_api {
      * @throws invalid_parameter_exception If one or more parameters are invalid.
      * @throws stored_file_creation_exception If there is a problem creating or storing files.
      */
-    public static function send_camshot
-        ($courseid, $screenshotid, $quizid, $webcampicture, $imagetype, $parenttype, $faceimage, $facefound) {
+    public static function send_camshot(
+        $courseid, $screenshotid, $quizid, $webcampicture, $imagetype, $parenttype = '', $faceimage = '',
+        $facefound = 0, $captureorigin = 'interval', $tabswitchid = 0) {
         global $DB, $USER;
 
         // Validate the params.
@@ -105,6 +110,8 @@ class quizaccess_proctoring_external extends external_api {
                 'parenttype' => $parenttype,
                 'faceimage' => $faceimage,
                 'facefound' => $facefound,
+                'captureorigin' => $captureorigin,
+                'tabswitchid' => $tabswitchid,
             ]
         );
 
@@ -150,7 +157,14 @@ class quizaccess_proctoring_external extends external_api {
             $record->webcampicture = "{$url}";
             $record->status = $camshot->status;
             $record->timemodified = time();
+            $record->captureorigin = $captureorigin;
+            $record->tabswitchid = $tabswitchid;
             $screenshotid = $DB->insert_record('quizaccess_proctoring_logs', $record, true);
+            $camshotlogid = $screenshotid;
+
+            if ($captureorigin === 'violation' && $tabswitchid) {
+                $DB->set_field('quizaccess_proctoring_tabswitch_logs', 'camshotlogid', $camshotlogid, ['id' => $tabswitchid]);
+            }
 
             // Save the face image.
             $record = new stdClass();
@@ -213,6 +227,222 @@ class quizaccess_proctoring_external extends external_api {
             ]
         );
     }
+
+    /**
+     * Defines the parameters required for sending a screen (desktop) capture.
+     *
+     * @return external_function_parameters The required parameters.
+     */
+    public static function send_screenshot_parameters() {
+        return new external_function_parameters(
+            [
+                'courseid' => new external_value(PARAM_INT, 'course id'),
+                'screenshotlogid' => new external_value(PARAM_INT, 'pre-created quizaccess_proctoring_screenshot_logs id'),
+                'quizid' => new external_value(PARAM_INT, 'screenshot quiz id (cmid)'),
+                'screenshotpicture' => new external_value(PARAM_RAW, 'screen capture photo'),
+                'captureorigin' => new external_value(
+                    PARAM_ALPHA, 'Whether this was an interval or violation capture', VALUE_DEFAULT, 'interval'),
+                'tabswitchid' => new external_value(
+                    PARAM_INT, 'Linked quizaccess_proctoring_tabswitch_logs id, 0 if none', VALUE_DEFAULT, 0),
+            ]
+        );
+    }
+
+    /**
+     * Store a screen (desktop) capture in Moodle subsystems and insert into the screenshot log table.
+     *
+     * Mirrors send_camshot(), but stores into quizaccess_proctoring_screenshot_logs under a
+     * distinct 'screenshot' filearea, since screen captures are a separate capture stream from
+     * webcam camshots.
+     *
+     * @param int $courseid The course ID where the proctoring took place.
+     * @param int $screenshotlogid The ID of the pre-created screenshot log row.
+     * @param int $quizid The cmid associated with the screenshot.
+     * @param string $screenshotpicture The base64-encoded screen capture image.
+     * @param string $captureorigin Either 'interval' or 'violation'.
+     * @param int $tabswitchid The linked tab-switch violation id, 0 if none.
+     *
+     * @return array Returns an array with 'screenshotlogid' and 'warnings'.
+     *
+     * @throws dml_exception If there is a problem with database interaction.
+     * @throws file_exception If there is an issue storing or retrieving files.
+     * @throws invalid_parameter_exception If one or more parameters are invalid.
+     * @throws stored_file_creation_exception If there is a problem creating or storing files.
+     */
+    public static function send_screenshot(
+        $courseid, $screenshotlogid, $quizid, $screenshotpicture, $captureorigin = 'interval', $tabswitchid = 0) {
+        global $DB, $USER;
+
+        self::validate_parameters(
+            self::send_screenshot_parameters(),
+            [
+                'courseid' => $courseid,
+                'screenshotlogid' => $screenshotlogid,
+                'quizid' => $quizid,
+                'screenshotpicture' => $screenshotpicture,
+                'captureorigin' => $captureorigin,
+                'tabswitchid' => $tabswitchid,
+            ]
+        );
+
+        $context = context_course::instance($courseid);
+        if (
+            !is_enrolled($context, $USER->id, 'mod/quiz:attempt') &&
+            !has_capability('mod/quiz:grade', $context)
+        ) {
+            throw new moodle_exception(
+                'accessdenied', 'quizaccess_proctoring', '', null,
+                get_string('notenrolled', 'quizaccess_proctoring')
+            );
+        }
+
+        $warnings = [];
+
+        $record = new stdClass();
+        $record->filearea = 'screenshot';
+        $record->component = 'quizaccess_proctoring';
+        $record->filepath = '';
+        $record->itemid = $screenshotlogid;
+        $record->license = '';
+        $record->author = '';
+
+        $modcontext = context_module::instance($quizid);
+        $fs = get_file_storage();
+        $record->filepath = file_correct_filepath($record->filepath);
+
+        // For base64 to file.
+        $data = $screenshotpicture;
+        list(, $data) = explode(';', $data);
+        $url = self::geturl($data, $screenshotlogid, $USER, $courseid, $record, $modcontext, $fs);
+
+        $record = new stdClass();
+        $record->courseid = $courseid;
+        $record->quizid = $quizid;
+        $record->userid = $USER->id;
+        $record->screenshotpicture = "{$url}";
+        $record->captureorigin = $captureorigin;
+        $record->tabswitchid = $tabswitchid;
+        $record->status = 0;
+        $record->timemodified = time();
+        $screenshotlogid = $DB->insert_record('quizaccess_proctoring_screenshot_logs', $record, true);
+
+        if ($captureorigin === 'violation' && $tabswitchid) {
+            $DB->set_field(
+                'quizaccess_proctoring_tabswitch_logs', 'screenshotlogid', $screenshotlogid, ['id' => $tabswitchid]);
+        }
+
+        $result = [];
+        $result['screenshotlogid'] = $screenshotlogid;
+        $result['warnings'] = $warnings;
+
+        return $result;
+    }
+
+    /**
+     * Return structure for sending screen captures.
+     *
+     * @return external_single_structure
+     */
+    public static function send_screenshot_returns() {
+        return new external_single_structure(
+            [
+                'screenshotlogid' => new external_value(PARAM_INT, 'screenshot log id sent'),
+                'warnings' => new external_warnings(),
+            ]
+        );
+    }
+
+    /**
+     * Defines the parameters required for logging a tab-switch/focus-loss violation event.
+     *
+     * @return external_function_parameters
+     */
+    public static function log_tabswitch_parameters() {
+        return new external_function_parameters(
+            [
+                'courseid' => new external_value(PARAM_INT, 'course id'),
+                'quizid' => new external_value(PARAM_INT, 'quiz id (cmid)'),
+                'attemptid' => new external_value(PARAM_INT, 'quiz attempt id', VALUE_DEFAULT, 0),
+                'eventtype' => new external_value(PARAM_ALPHA, 'blur or visibilitychange'),
+                'starttime' => new external_value(PARAM_INT, 'epoch seconds when the student switched away'),
+                'duration' => new external_value(PARAM_INT, 'seconds spent away before returning'),
+            ]
+        );
+    }
+
+    /**
+     * Logs a single tab-switch/focus-loss violation event (one row per switch-away/return pair).
+     *
+     * @param int $courseid The course ID.
+     * @param int $quizid The cmid.
+     * @param int $attemptid The quiz attempt id.
+     * @param string $eventtype Either 'blur' or 'visibilitychange'.
+     * @param int $starttime Epoch seconds when the student switched away.
+     * @param int $duration Seconds spent away before returning.
+     *
+     * @return array Returns an array with 'tabswitchid' and 'warnings'.
+     * @throws dml_exception If there is a problem with database interaction.
+     * @throws invalid_parameter_exception If one or more parameters are invalid.
+     */
+    public static function log_tabswitch($courseid, $quizid, $attemptid, $eventtype, $starttime, $duration) {
+        global $DB, $USER;
+
+        self::validate_parameters(
+            self::log_tabswitch_parameters(),
+            [
+                'courseid' => $courseid,
+                'quizid' => $quizid,
+                'attemptid' => $attemptid,
+                'eventtype' => $eventtype,
+                'starttime' => $starttime,
+                'duration' => $duration,
+            ]
+        );
+
+        $context = context_course::instance($courseid);
+        if (
+            !is_enrolled($context, $USER->id, 'mod/quiz:attempt') &&
+            !has_capability('mod/quiz:grade', $context)
+        ) {
+            throw new moodle_exception(
+                'accessdenied', 'quizaccess_proctoring', '', null,
+                get_string('notenrolled', 'quizaccess_proctoring')
+            );
+        }
+
+        $record = new stdClass();
+        $record->courseid = $courseid;
+        $record->quizid = $quizid;
+        $record->userid = $USER->id;
+        $record->attemptid = $attemptid;
+        $record->eventtype = $eventtype;
+        $record->starttime = $starttime;
+        $record->duration = $duration;
+        $record->camshotlogid = 0;
+        $record->screenshotlogid = 0;
+        $record->timecreated = time();
+        $tabswitchid = $DB->insert_record('quizaccess_proctoring_tabswitch_logs', $record, true);
+
+        return [
+            'tabswitchid' => $tabswitchid,
+            'warnings' => [],
+        ];
+    }
+
+    /**
+     * Return structure for logging a tab-switch violation event.
+     *
+     * @return external_single_structure
+     */
+    public static function log_tabswitch_returns() {
+        return new external_single_structure(
+            [
+                'tabswitchid' => new external_value(PARAM_INT, 'id of the newly logged violation row'),
+                'warnings' => new external_warnings(),
+            ]
+        );
+    }
+
     /**
      * Adds a timestamp to the captured image.
      *
@@ -223,7 +453,7 @@ class quizaccess_proctoring_external extends external_api {
      * @return string The updated image data with the added timestamp.
      * @throws Exception If there is an issue with image creation or manipulation.
      */
-    private static function add_timecode_to_image($data) {
+    protected static function add_timecode_to_image($data) {
         global $CFG;
 
         $image = imagecreatefromstring($data);
@@ -442,10 +672,11 @@ class quizaccess_proctoring_external extends external_api {
      * @param mixed $fs The file storage instance to handle file operations.
      * @return mixed The URL of the stored image file with the timecode added.
      */
-    private static function geturl(string $data, int $screenshotid, $USER, int $courseid, stdClass $record, $context, $fs) {
+    protected static function geturl(string $data, int $screenshotid, $USER, int $courseid, stdClass $record, $context, $fs) {
         list(, $data) = explode(',', $data);
         $data = base64_decode($data);
-        $filename = 'webcam-' . $screenshotid . '-' . $USER->id . '-' . $courseid . '-' . time() . random_int(1, 1000) . '.png';
+        $filename = $record->filearea . '-' . $screenshotid . '-' . $USER->id . '-' . $courseid . '-'
+            . time() . random_int(1, 1000) . '.png';
 
         $data = self::add_timecode_to_image($data);
 

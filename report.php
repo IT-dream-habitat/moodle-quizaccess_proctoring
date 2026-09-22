@@ -105,6 +105,16 @@ if (has_capability('quizaccess/proctoring:deletecamshots', $context, $USER->id) 
             'quizid' => $cmid,
             'userid' => $studentid,
         ]);
+        $DB->delete_records('quizaccess_proctoring_screenshot_logs', [
+            'courseid' => $courseid,
+            'quizid' => $cmid,
+            'userid' => $studentid,
+        ]);
+        $DB->delete_records('quizaccess_proctoring_tabswitch_logs', [
+            'courseid' => $courseid,
+            'quizid' => $cmid,
+            'userid' => $studentid,
+        ]);
         $DB->delete_records('quizaccess_proctoring_fm_warnings', [
             'courseid' => $courseid,
             'quizid' => $cmid,
@@ -112,28 +122,22 @@ if (has_capability('quizaccess/proctoring:deletecamshots', $context, $USER->id) 
         ]);
 
 
-        $params = [
-        'userid' => $studentid,
-        'contextid' => $context->id,
-        'component' => 'quizaccess_proctoring',
-        'filearea'  => 'picture',
-        ];
-
-        $usersfile = $DB->get_records('files', $params);
         $fs = get_file_storage();
-        foreach ($usersfile as $file) {
-            $fileinfo = [
-                'component' => 'quizaccess_proctoring',
-                'filearea' => 'picture',
-                'itemid' => $file->itemid,
+        foreach (['picture', 'screenshot'] as $filearea) {
+            $params = [
+                'userid' => $studentid,
                 'contextid' => $context->id,
-                'filepath' => '/',
-                'filename' => $file->filename,
+                'component' => 'quizaccess_proctoring',
+                'filearea'  => $filearea,
             ];
-            $storedfile = $fs->get_file($fileinfo['contextid'], $fileinfo['component'], $fileinfo['filearea'],
-                        $fileinfo['itemid'], $fileinfo['filepath'], $fileinfo['filename']);
-            if ($storedfile) {
-                $storedfile->delete();
+
+            $usersfile = $DB->get_records('files', $params);
+            foreach ($usersfile as $file) {
+                $storedfile = $fs->get_file($context->id, 'quizaccess_proctoring', $filearea,
+                            $file->itemid, '/', $file->filename);
+                if ($storedfile) {
+                    $storedfile->delete();
+                }
             }
         }
 
@@ -203,7 +207,8 @@ if (
                     MAX(e.webcampicture) AS webcampicture,
                     MAX(e.id) AS reportid,
                     MAX(e.status) AS status,
-                    MAX(e.timemodified) AS timemodified
+                    MAX(e.timemodified) AS timemodified,
+                    COALESCE(MAX(tsl.violationscount), 0) AS violationscount
                 FROM
                     {quizaccess_proctoring_logs} e
                 INNER JOIN
@@ -214,6 +219,12 @@ if (
                     ON e.courseid = pfw.courseid
                     AND e.quizid = pfw.quizid
                     AND e.userid = pfw.userid
+                LEFT JOIN
+                    (SELECT userid, COUNT(*) AS violationscount
+                       FROM {quizaccess_proctoring_tabswitch_logs}
+                      WHERE courseid = :courseid AND quizid = :cmid
+                      GROUP BY userid) tsl
+                    ON tsl.userid = e.userid
                 WHERE
                     e.courseid = :courseid
                     AND e.quizid = :cmid
@@ -231,12 +242,19 @@ if (
                                 MAX(e.webcampicture) AS webcampicture,
                                 MAX(e.id) AS reportid,
                                 MAX(e.status) AS status,
-                                MAX(e.timemodified) AS timemodified
+                                MAX(e.timemodified) AS timemodified,
+                                COALESCE(MAX(tsl.violationscount), 0) AS violationscount
                         FROM {quizaccess_proctoring_logs} e
                         INNER JOIN {user} u ON u.id = e.userid
                         LEFT JOIN {quizaccess_proctoring_fm_warnings} pfw ON e.courseid = pfw.courseid
                         AND e.quizid = pfw.quizid
                         AND e.userid = pfw.userid
+                        LEFT JOIN
+                            (SELECT userid, COUNT(*) AS violationscount
+                               FROM {quizaccess_proctoring_tabswitch_logs}
+                              WHERE courseid = :courseid AND quizid = :quizid
+                              GROUP BY userid) tsl
+                            ON tsl.userid = e.userid
                         WHERE e.courseid = :courseid
                         AND e.quizid = :quizid
                         GROUP BY e.userid, u.firstname, u.lastname, u.email, pfw.reportid";
@@ -251,13 +269,20 @@ if (
                                 MAX(e.webcampicture) AS webcampicture,
                                 MAX(e.id) AS reportid,
                                 MAX(e.status) AS status,
-                                                        MAX(e.timemodified) AS timemodified
+                                                        MAX(e.timemodified) AS timemodified,
+                                COALESCE(MAX(tsl.violationscount), 0) AS violationscount
                         FROM {quizaccess_proctoring_logs} e
                         INNER JOIN {user} u ON u.id = e.userid
                         LEFT JOIN {quizaccess_proctoring_fm_warnings} pfw
                         ON e.courseid = pfw.courseid
                         AND e.quizid = pfw.quizid
                         AND e.userid = pfw.userid
+                        LEFT JOIN
+                            (SELECT userid, COUNT(*) AS violationscount
+                               FROM {quizaccess_proctoring_tabswitch_logs}
+                              WHERE courseid = :courseid1 AND quizid = :quizid1
+                              GROUP BY userid) tsl
+                            ON tsl.userid = e.userid
                         WHERE (e.courseid = :courseid1 AND e.quizid = :quizid1 AND
                               " . $DB->sql_like('u.firstname', ':firstnamelike', false) . ")
                                 OR (e.courseid = :courseid2 AND e.quizid = :quizid2 AND "
@@ -316,6 +341,7 @@ if (
             $row['email'] = $info->email;
             $row['timemodified'] = date('Y/M/d H:i:s', $info->timemodified);
             $row['warningicon'] = ($info->warningid == '') ? true : false;
+            $row['violationscount'] = $info->violationscount ?? 0;
 
             $actionmenu = new action_menu();
             $actionmenu->set_kebab_trigger(get_string('actions'));
@@ -380,6 +406,7 @@ if (
         'cmid' => $cmid,
         'searchkey' => ($submittype == "Clear") ? '' : $searchkey,
         'showclearbutton' => $showclearbutton,
+        'enabletabswitchdetection' => (bool)get_config('quizaccess_proctoring', 'enabletabswitchdetection'),
         'checkrow' => (!empty($row)) ? true : false,
         'rows' => $rows,
         'backbutton' => preg_replace('/&amp;/', '&', $backbutton),
@@ -406,6 +433,7 @@ if (
                e.userid AS studentid,
                e.webcampicture AS webcampicture,
                e.status AS status,
+               e.captureorigin AS captureorigin,
                e.timemodified AS timemodified,
                u.firstname AS firstname,
                u.lastname AS lastname,
@@ -439,8 +467,72 @@ if (
                                         ($info->awsflag == 3 && $info->awsscore < $thresholdvalue ? 'yellow' : 'none'));
                 $row['img_id'] = 'reportid-' . $info->reportid;
                 $row['lightbox_data'] = basename($info->webcampicture, '.png');
+                $row['capturekind'] = 'webcam';
+                $row['isviolation'] = ($info->captureorigin ?? 'interval') === 'violation';
+                $row['timemodified'] = $info->timemodified;
                 $studentdata[] = $row;
         }
+
+        // Merge in the periodic/violation screen captures alongside the webcam images.
+        $screenshotsql = "SELECT sl.id AS screenshotlogid,
+               sl.screenshotpicture AS screenshotpicture,
+               sl.captureorigin AS captureorigin,
+               sl.timemodified AS timemodified
+        FROM {quizaccess_proctoring_screenshot_logs} sl
+        WHERE sl.courseid = :courseid
+          AND sl.quizid = :cmid
+          AND sl.userid = :studentid
+          AND sl.deletionprogress = :deletionprogress";
+        $screenshotrows = $DB->get_recordset_sql($screenshotsql, $params);
+        foreach ($screenshotrows as $info) {
+            $row = [];
+            $row['firstname'] = $user->firstname;
+            $row['lastname'] = $user->lastname;
+            $row['image_url'] = $info->screenshotpicture;
+            $row['border_color'] = 'none';
+            $row['img_id'] = 'screenshotlogid-' . $info->screenshotlogid;
+            $row['lightbox_data'] = basename($info->screenshotpicture, '.png');
+            $row['capturekind'] = 'screenshot';
+            $row['isviolation'] = $info->captureorigin === 'violation';
+            $row['timemodified'] = $info->timemodified;
+            $studentdata[] = $row;
+        }
+        $screenshotrows->close();
+
+        // Show the most recent captures first, newest at the top of the combined gallery.
+        usort($studentdata, function($a, $b) {
+            return $b['timemodified'] <=> $a['timemodified'];
+        });
+
+        // Build the tab-switch/focus-loss violations timeline for this student on this quiz.
+        $enabletabswitchdetection = (bool)get_config('quizaccess_proctoring', 'enabletabswitchdetection');
+        $violations = [];
+        if ($enabletabswitchdetection) {
+            $tabswitchsql = "SELECT tsl.id, tsl.eventtype, tsl.starttime, tsl.duration,
+                   tsl.camshotlogid, tsl.screenshotlogid,
+                   cl.webcampicture AS camshoturl,
+                   sl.screenshotpicture AS screenshoturl
+            FROM {quizaccess_proctoring_tabswitch_logs} tsl
+            LEFT JOIN {quizaccess_proctoring_logs} cl ON cl.id = tsl.camshotlogid
+            LEFT JOIN {quizaccess_proctoring_screenshot_logs} sl ON sl.id = tsl.screenshotlogid
+            WHERE tsl.courseid = :courseid
+              AND tsl.quizid = :cmid
+              AND tsl.userid = :studentid
+            ORDER BY tsl.starttime DESC";
+            $tabswitchparams = ['courseid' => $courseid, 'cmid' => $cmid, 'studentid' => $studentid];
+            $tabswitchrows = $DB->get_recordset_sql($tabswitchsql, $tabswitchparams);
+            foreach ($tabswitchrows as $tsinfo) {
+                $violations[] = [
+                    'eventtype' => $tsinfo->eventtype,
+                    'starttime' => date('Y/M/d H:i:s', $tsinfo->starttime),
+                    'duration' => $tsinfo->duration,
+                    'camshoturl' => $tsinfo->camshoturl ?: null,
+                    'screenshoturl' => $tsinfo->screenshoturl ?: null,
+                ];
+            }
+            $tabswitchrows->close();
+        }
+
         $analyzeparam = ['studentid' => $studentid, 'cmid' => $cmid, 'courseid' => $courseid, 'reportid' => $reportid];
         $analyzeurl = new moodle_url('/mod/quiz/accessrule/proctoring/analyzeimage.php', $analyzeparam);
         $analyzeurl = preg_replace('/&amp;/', '&', $analyzeurl);
@@ -455,11 +547,14 @@ if (
             'redirecturl' => $redirecturl,
             'data' => $studentdata,
             'userimageurl' => $userimageurl,
-            'firstname' => $info->firstname,
-            'lastname' => $info->lastname,
-            'email' => $info->email,
+            'firstname' => $user->firstname,
+            'lastname' => $user->lastname,
+            'email' => $user->email,
             'fcmethod' => ($fcmethod == 'BS') ? true : false,
             'analyzeurl' => $analyzeurl,
+            'enabletabswitchdetection' => $enabletabswitchdetection,
+            'hasviolations' => !empty($violations),
+            'violations' => $violations,
         ];
         echo $OUTPUT->render_from_template('quizaccess_proctoring/studentreport', $templatecontext);
     }

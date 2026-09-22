@@ -74,4 +74,24 @@ $capabilities = [
             'manager' => CAP_ALLOW, // Managers can analyze images.
         ],
     ],
+
+    // This allows the student or manager to send a screen capture when screen capture is active.
+    'quizaccess/proctoring:sendscreenshot' => [
+        'captype' => 'write',
+        'contextlevel' => CONTEXT_MODULE,
+        'archetypes' => [
+            'student' => CAP_ALLOW, // Students are allowed to send screenshots.
+            'manager' => CAP_ALLOW, // Managers can also send screenshots.
+        ],
+    ],
+
+    // This allows the student or manager to log a tab-switch/focus-loss violation event.
+    'quizaccess/proctoring:sendtabswitchevent' => [
+        'captype' => 'write',
+        'contextlevel' => CONTEXT_MODULE,
+        'archetypes' => [
+            'student' => CAP_ALLOW, // Students are allowed to log tab-switch events.
+            'manager' => CAP_ALLOW, // Managers can also log tab-switch events.
+        ],
+    ],
 ];

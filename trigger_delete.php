@@ -44,6 +44,8 @@ has_capability('quizaccess/proctoring:deletecamshots', $context);
 
 // Updating the proctoring logs.
 $DB->set_field('quizaccess_proctoring_logs', 'deletionprogress', 1);
+$DB->set_field('quizaccess_proctoring_screenshot_logs', 'deletionprogress', 1);
+$DB->delete_records('quizaccess_proctoring_tabswitch_logs');
 
 // Redirect to the settings page.
 $url = new moodle_url('/admin/settings.php', ['section' => 'modsettingsquizcatproctoring']);

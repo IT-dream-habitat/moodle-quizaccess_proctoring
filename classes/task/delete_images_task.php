@@ -94,6 +94,30 @@ class delete_images_task extends scheduled_task {
             } else {
                 mtrace("No records found for deletion.");
             }
+
+            // Select 10 random rows from screenshot logs where deletionprogress = 1.
+            $screenshotsql = "SELECT id, screenshotpicture
+            FROM {quizaccess_proctoring_screenshot_logs}
+            WHERE deletionprogress = :deletionprogress
+            LIMIT 10";
+
+            $screenshotparams = ['deletionprogress' => 1];
+            $screenshotrecords = $DB->get_records_sql($screenshotsql, $screenshotparams);
+            if (!empty($screenshotrecords)) {
+                $fs = get_file_storage();
+                $screenshotids = [];
+                foreach ($screenshotrecords as $record) {
+                    $this->delete_file($fs, $record->screenshotpicture, 'quizaccess_proctoring', 'screenshot');
+                    $screenshotids[] = $record->id;
+                }
+                if (!empty($screenshotids)) {
+                    list($insql, $params) = $DB->get_in_or_equal($screenshotids);
+                    $DB->delete_records_select('quizaccess_proctoring_screenshot_logs', "id $insql", $params);
+                    mtrace("Deleted " . count($screenshotids) . " records from quizaccess_proctoring_screenshot_logs and associated files.");
+                }
+            } else {
+                mtrace("No screenshot records found for deletion.");
+            }
         } catch (Exception $e) {
             mtrace("An error occurred while deleting images: " . $e->getMessage());
         }
