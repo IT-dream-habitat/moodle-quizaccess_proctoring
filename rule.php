@@ -395,6 +395,7 @@ class quizaccess_proctoring extends quizaccess_proctoring_parent_class_alias {
         $page->set_title($this->quizobj->get_course()->shortname . ': ' . $page->title);
         $page->set_popup_notification_allowed(false);
         $page->set_heading($page->title);
+        $page->requires->css('/mod/quiz/accessrule/proctoring/styles.css');
 
         if ($cmid) {
             // Fetch the course module record for the quiz.

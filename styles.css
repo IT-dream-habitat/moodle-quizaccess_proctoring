@@ -447,6 +447,18 @@ body.proctoring-lb-disable-scrolling {
     }
 }
 
+.proctoring-screenshare-prompt {
+    position: fixed;
+    z-index: 9999;
+    bottom: 20px;
+    left: 20px;
+    background: #fff;
+    border: 1px solid #ccc;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+    border-radius: 6px;
+    padding: 10px;
+}
+
 #quizaccess_proctoring_user_table > thead > tr > th:first-child {
     display: flex;
     align-items: center;

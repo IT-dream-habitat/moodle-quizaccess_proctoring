@@ -11,6 +11,7 @@ define(['jquery', 'core/ajax', 'core/notification', 'core/str'],
                 {key: 'info:screenshareallowed', component: 'quizaccess_proctoring'},
                 {key: 'screenshareended', component: 'quizaccess_proctoring'},
                 {key: 'wrong_during_taking_screencapture', component: 'quizaccess_proctoring'},
+                {key: 'sharescreenbutton', component: 'quizaccess_proctoring'},
             ];
             try {
                 const strings = await Str.get_strings(stringkeys);
@@ -19,6 +20,7 @@ define(['jquery', 'core/ajax', 'core/notification', 'core/str'],
                     screenshareallowed: strings[1],
                     screenshareended: strings[2],
                     wrongduringtakingscreencapture: strings[3],
+                    sharescreenbutton: strings[4],
                 };
             } catch (error) {
                 Notification.exception(error);
@@ -98,39 +100,57 @@ define(['jquery', 'core/ajax', 'core/notification', 'core/str'],
 
                 let intervalhandle = null;
 
-                try {
-                    const stream = await navigator.mediaDevices.getDisplayMedia({video: true});
-                    video.srcObject = stream;
-                    await video.play();
-                    screenShareActive = true;
+                // getDisplayMedia() requires a genuine, direct user gesture in every major
+                // browser - unlike getUserMedia(), it cannot be requested automatically when
+                // the page loads (browsers silently refuse it with no prompt at all). Show a
+                // button the student must click to grant it; if they never click it, or the
+                // picker is declined, screen capture simply stays off for this attempt - the
+                // soft requirement still holds either way.
+                const prompt = document.createElement('div');
+                prompt.className = 'proctoring-screenshare-prompt';
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'btn btn-primary';
+                button.textContent = strings.sharescreenbutton;
+                prompt.appendChild(button);
+                document.body.appendChild(prompt);
 
-                    Notification.addNotification({
-                        message: strings.screenshareallowed,
-                        type: 'success'
-                    });
+                button.addEventListener('click', async function() {
+                    prompt.remove();
+                    try {
+                        const stream = await navigator.mediaDevices.getDisplayMedia({video: true});
+                        video.srcObject = stream;
+                        await video.play();
+                        screenShareActive = true;
 
-                    stream.getVideoTracks()[0].addEventListener('ended', function() {
-                        screenShareActive = false;
-                        if (intervalhandle) {
-                            clearInterval(intervalhandle);
-                        }
                         Notification.addNotification({
-                            message: strings.screenshareended,
+                            message: strings.screenshareallowed,
+                            type: 'success'
+                        });
+
+                        stream.getVideoTracks()[0].addEventListener('ended', function() {
+                            screenShareActive = false;
+                            if (intervalhandle) {
+                                clearInterval(intervalhandle);
+                            }
+                            Notification.addNotification({
+                                message: strings.screenshareended,
+                                type: 'warning'
+                            });
+                        });
+
+                        setTimeout(takeScreenshot, 3000);
+                        intervalhandle = setInterval(takeScreenshot, props.screenshotdelay);
+                    } catch (error) {
+                        // Declined, dismissed, or otherwise unavailable: soft requirement, do
+                        // not block the attempt, just let the student know captures are off.
+                        screenShareActive = false;
+                        Notification.addNotification({
+                            message: strings.sharescreenwarning,
                             type: 'warning'
                         });
-                    });
-
-                    setTimeout(takeScreenshot, 3000);
-                    intervalhandle = setInterval(takeScreenshot, props.screenshotdelay);
-                } catch (error) {
-                    // Declined, dismissed, or otherwise unavailable: soft requirement, do not
-                    // block the attempt, just let the student know periodic screenshots are off.
-                    screenShareActive = false;
-                    Notification.addNotification({
-                        message: strings.sharescreenwarning,
-                        type: 'warning'
-                    });
-                }
+                    }
+                }, {once: true});
 
                 return true;
             },

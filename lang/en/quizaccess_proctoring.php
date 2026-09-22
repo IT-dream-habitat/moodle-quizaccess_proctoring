@@ -255,6 +255,7 @@ $string['noviolations'] = 'No tab-switch or focus-loss violations were recorded 
 $string['screenshotpicture'] = 'Screen capture';
 $string['warning:cameraallowwarning'] = 'Please allow camera access.';
 $string['warning:sharescreenwarning'] = 'Please allow screen sharing to continue being monitored. Your attempt will still continue.';
+$string['sharescreenbutton'] = 'Share your screen for exam monitoring';
 $string['info:screenshareallowed'] = 'Your screen is now being shared.';
 $string['screenshareended'] = 'Screen sharing has stopped. Your attempt will continue, but this has been logged for review.';
 $string['warninglabel'] = 'Warnings';
