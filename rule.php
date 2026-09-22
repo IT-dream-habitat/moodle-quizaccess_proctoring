@@ -457,6 +457,7 @@ class quizaccess_proctoring extends quizaccess_proctoring_parent_class_alias {
                 $screenshotrecord->id = $DB->insert_record('quizaccess_proctoring_screenshot_logs', $screenshotrecord);
                 $screenshotrecord->screenshotdelay = $screenshotdelay;
                 $screenshotrecord->image_width = $screenshotwidth;
+                $screenshotrecord->attemptid = $attempt;
 
                 $page->requires->js_call_amd('quizaccess_proctoring/screencapture', 'init', [$screenshotrecord]);
             }
