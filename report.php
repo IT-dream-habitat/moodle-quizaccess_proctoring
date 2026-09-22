@@ -222,7 +222,7 @@ if (
                 LEFT JOIN
                     (SELECT userid, COUNT(*) AS violationscount
                        FROM {quizaccess_proctoring_tabswitch_logs}
-                      WHERE courseid = :courseid AND quizid = :cmid
+                      WHERE courseid = :vscourseid AND quizid = :vscmid
                       GROUP BY userid) tsl
                     ON tsl.userid = e.userid
                 WHERE
@@ -252,7 +252,7 @@ if (
                         LEFT JOIN
                             (SELECT userid, COUNT(*) AS violationscount
                                FROM {quizaccess_proctoring_tabswitch_logs}
-                              WHERE courseid = :courseid AND quizid = :quizid
+                              WHERE courseid = :vscourseid2 AND quizid = :vsquizid2
                               GROUP BY userid) tsl
                             ON tsl.userid = e.userid
                         WHERE e.courseid = :courseid
@@ -280,7 +280,7 @@ if (
                         LEFT JOIN
                             (SELECT userid, COUNT(*) AS violationscount
                                FROM {quizaccess_proctoring_tabswitch_logs}
-                              WHERE courseid = :courseid1 AND quizid = :quizid1
+                              WHERE courseid = :vscourseid4 AND quizid = :vsquizid4
                               GROUP BY userid) tsl
                             ON tsl.userid = e.userid
                         WHERE (e.courseid = :courseid1 AND e.quizid = :quizid1 AND
@@ -302,7 +302,9 @@ if (
                 'courseid3' => $courseid,
                 'quizid1' => $cmid,
                 'quizid2' => $cmid,
-                'quizid3' => $cmid];
+                'quizid3' => $cmid,
+                'vscourseid4' => $courseid,
+                'vsquizid4' => $cmid];
 
         // Calculate total records for pagination.
         $totalrecordssql = "SELECT COUNT(DISTINCT e.userid)
@@ -326,6 +328,12 @@ if (
             'cmid' => $cmid,
             'studentid' => $studentid,
             'reportid' => $reportid,
+            'vscourseid' => $courseid,
+            'vscmid' => $cmid,
+            'vscourseid2' => $courseid,
+            'vsquizid2' => $cmid,
+            // The "clear search" branch's SQL references :quizid (not :cmid) in its WHERE clause.
+            'quizid' => $cmid,
         ];
         $totalrecordssql = "SELECT COUNT(1) FROM ({$sql}) as subquery";
         $totalrecords = $DB->count_records_sql($totalrecordssql, $params);
