@@ -295,6 +295,36 @@ class quizaccess_proctoring extends quizaccess_proctoring_parent_class_alias {
     }
 
     /**
+     * Validate the quiz settings form.
+     *
+     * Screen capture requires a fresh browser permission grant on every page (there is no
+     * way for getDisplayMedia() to survive a page reload, or to be silently remembered like
+     * a camera permission - this is a hard browser platform limitation, not something this
+     * plugin can work around). In practice that means screen capture reliably works for an
+     * entire attempt only when the quiz has no per-question page reloads to begin with, so
+     * require "New page: Never, all questions on one page" whenever proctoring is enabled on
+     * a quiz and screen capture is turned on site-wide.
+     *
+     * @param array $errors the errors found so far.
+     * @param array $data the submitted form data.
+     * @param array $files information about any uploaded files.
+     * @param mod_quiz_mod_form $quizform the quiz form object.
+     * @return array $errors the updated $errors array.
+     */
+    public static function validate_settings_form_fields(array $errors, array $data, $files, $quizform) {
+        if (
+            !empty($data['proctoringrequired']) &&
+            get_config('quizaccess_proctoring', 'enablescreencapture') &&
+            isset($data['questionsperpage']) &&
+            (int)$data['questionsperpage'] !== 0
+        ) {
+            $errors['questionsperpagegrp'] = get_string('screencapturerequiresonepage', 'quizaccess_proctoring');
+        }
+
+        return $errors;
+    }
+
+    /**
      * Save any submitted settings when the quiz settings form is submitted.
      * Called from quiz_after_add_or_update() in lib.php.
      *
