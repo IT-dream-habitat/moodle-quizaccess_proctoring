@@ -178,7 +178,8 @@ if (
                     u.firstname AS firstname,
                     u.lastname AS lastname,
                     u.email AS email,
-                    pfw.reportid AS warningid
+                    pfw.reportid AS warningid,
+                    COALESCE(tsl.violationscount, 0) AS violationscount
                 FROM
                     {quizaccess_proctoring_logs} e
                 INNER JOIN
@@ -189,6 +190,12 @@ if (
                     ON e.courseid = pfw.courseid
                     AND e.quizid = pfw.quizid
                     AND e.userid = pfw.userid
+                LEFT JOIN
+                    (SELECT userid, COUNT(*) AS violationscount
+                       FROM {quizaccess_proctoring_tabswitch_logs}
+                      WHERE courseid = :vscourseid3 AND quizid = :vscmid3
+                      GROUP BY userid) tsl
+                    ON tsl.userid = e.userid
                 WHERE
                     e.courseid = :courseid
                     AND e.quizid = :cmid
@@ -332,6 +339,8 @@ if (
             'vscmid' => $cmid,
             'vscourseid2' => $courseid,
             'vsquizid2' => $cmid,
+            'vscourseid3' => $courseid,
+            'vscmid3' => $cmid,
             // The "clear search" branch's SQL references :quizid (not :cmid) in its WHERE clause.
             'quizid' => $cmid,
         ];
