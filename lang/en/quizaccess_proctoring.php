@@ -259,6 +259,7 @@ $string['sharescreenbutton'] = 'Share my screen';
 $string['sharescreentitle'] = 'Screen sharing required for this exam';
 $string['sharescreeninstructions'] = 'When prompted, please choose "Entire Screen" (not a single window or tab), so that using another application or browser tab during this exam can be reviewed.';
 $string['sharescreenskip'] = 'Skip for now';
+$string['sharescreenwrongsurface'] = 'You shared a window or tab instead of your entire screen. Violation captures will only show that window/tab, not other applications - please stop sharing and share your Entire Screen instead for full coverage.';
 $string['info:screenshareallowed'] = 'Your screen is now being shared.';
 $string['screenshareended'] = 'Screen sharing has stopped. Your attempt will continue, but this has been logged for review.';
 $string['warninglabel'] = 'Warnings';

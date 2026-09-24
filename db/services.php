@@ -73,4 +73,15 @@ $functions = [
         'capabilities' => 'quizaccess/proctoring:sendtabswitchevent',
         'services'     => [MOODLE_OFFICIAL_MOBILE_SERVICE],
     ],
+
+    // Fill in the final duration of a tab-switch violation once the student returns.
+    'quizaccess_proctoring_update_tabswitch_duration' => [
+        'classname'    => 'quizaccess_proctoring_external',
+        'methodname'   => 'update_tabswitch_duration',
+        'description'  => 'Update the final duration of a tab-switch violation once the student returns.',
+        'type'         => 'write',
+        'ajax'         => true,
+        'capabilities' => 'quizaccess/proctoring:sendtabswitchevent',
+        'services'     => [MOODLE_OFFICIAL_MOBILE_SERVICE],
+    ],
 ];

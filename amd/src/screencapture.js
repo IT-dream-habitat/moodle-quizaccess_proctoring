@@ -15,6 +15,7 @@ define(['jquery', 'core/ajax', 'core/notification', 'core/str'],
                 {key: 'sharescreentitle', component: 'quizaccess_proctoring'},
                 {key: 'sharescreeninstructions', component: 'quizaccess_proctoring'},
                 {key: 'sharescreenskip', component: 'quizaccess_proctoring'},
+                {key: 'sharescreenwrongsurface', component: 'quizaccess_proctoring'},
             ];
             try {
                 const strings = await Str.get_strings(stringkeys);
@@ -27,6 +28,7 @@ define(['jquery', 'core/ajax', 'core/notification', 'core/str'],
                     sharescreentitle: strings[5],
                     sharescreeninstructions: strings[6],
                     sharescreenskip: strings[7],
+                    sharescreenwrongsurface: strings[8],
                 };
             } catch (error) {
                 Notification.exception(error);
@@ -119,10 +121,26 @@ define(['jquery', 'core/ajax', 'core/notification', 'core/str'],
                         await video.play();
                         screenShareActive = true;
 
-                        Notification.addNotification({
-                            message: strings.screenshareallowed,
-                            type: 'success'
-                        });
+                        // getSettings().displaySurface tells us what was ACTUALLY granted
+                        // (Chromium-based browsers; not all browsers report it, in which case
+                        // this is silently skipped rather than risk a false warning). If the
+                        // student shared a single window or tab instead of the entire screen,
+                        // violation captures can only ever show that window/tab's own content -
+                        // never anything else they switch to - since browsers permanently lock
+                        // a tab/window-level share to that source. Tell them right away so they
+                        // can re-share correctly instead of silently getting useless captures.
+                        const settings = stream.getVideoTracks()[0].getSettings();
+                        if (settings.displaySurface && settings.displaySurface !== 'monitor') {
+                            Notification.addNotification({
+                                message: strings.sharescreenwrongsurface,
+                                type: 'warning'
+                            });
+                        } else {
+                            Notification.addNotification({
+                                message: strings.screenshareallowed,
+                                type: 'success'
+                            });
+                        }
 
                         stream.getVideoTracks()[0].addEventListener('ended', function() {
                             screenShareActive = false;

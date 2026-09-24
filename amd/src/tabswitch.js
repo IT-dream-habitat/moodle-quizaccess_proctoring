@@ -9,6 +9,7 @@ define(['core/ajax', 'core/notification', 'quizaccess_proctoring/proctoring', 'q
         // itself is actually hidden (switched away from, or covered by another app), which is a
         // much more reliable "did they actually leave the exam" signal.
         let pendingStart = null;
+        let pendingTabswitchId = null;
 
         return {
             /**
@@ -30,36 +31,56 @@ define(['core/ajax', 'core/notification', 'quizaccess_proctoring/proctoring', 'q
 
                 document.addEventListener('visibilitychange', function() {
                     if (document.visibilityState === 'hidden') {
-                        if (pendingStart === null) {
-                            pendingStart = Date.now();
+                        if (pendingStart !== null) {
+                            return;
                         }
+                        pendingStart = Date.now();
+                        const starttime = Math.floor(pendingStart / 1000);
+
+                        // Log the violation - and capture evidence - immediately, while the
+                        // student is actually away, not when they come back. A screen/webcam
+                        // capture taken after they return just shows Moodle again, which is
+                        // useless as evidence of what they switched to; the whole point is
+                        // catching what was on screen at the moment of the switch (this only
+                        // shows the other tab/app if the student granted "Entire Screen"
+                        // sharing rather than a single window or tab).
+                        const request = {
+                            methodname: 'quizaccess_proctoring_log_tabswitch',
+                            args: {
+                                'courseid': props.courseid,
+                                'quizid': props.quizid,
+                                'attemptid': props.attemptid || 0,
+                                'eventtype': 'visibilitychange',
+                                'starttime': starttime,
+                                'duration': 0,
+                            }
+                        };
+
+                        Ajax.call([request])[0].done(function(res) {
+                            pendingTabswitchId = res.tabswitchid;
+                            Proctoring.captureNow('violation', pendingTabswitchId);
+                            ScreenCapture.captureNow('violation', pendingTabswitchId);
+                        }).fail(Notification.exception);
                         return;
                     }
 
+                    // Returning to the tab: now the final duration is known, fill it in on the
+                    // violation row already created (and already tagged to its captures) above.
                     if (pendingStart === null) {
                         return;
                     }
-                    const starttime = Math.floor(pendingStart / 1000);
                     const duration = Math.max(0, Math.round((Date.now() - pendingStart) / 1000));
+                    const tabswitchid = pendingTabswitchId;
                     pendingStart = null;
+                    pendingTabswitchId = null;
 
-                    const request = {
-                        methodname: 'quizaccess_proctoring_log_tabswitch',
-                        args: {
-                            'courseid': props.courseid,
-                            'quizid': props.quizid,
-                            'attemptid': props.attemptid || 0,
-                            'eventtype': 'visibilitychange',
-                            'starttime': starttime,
-                            'duration': duration,
-                        }
-                    };
-
-                    Ajax.call([request])[0].done(function(res) {
-                        const tabswitchid = res.tabswitchid;
-                        Proctoring.captureNow('violation', tabswitchid);
-                        ScreenCapture.captureNow('violation', tabswitchid);
-                    }).fail(Notification.exception);
+                    if (!tabswitchid) {
+                        return;
+                    }
+                    Ajax.call([{
+                        methodname: 'quizaccess_proctoring_update_tabswitch_duration',
+                        args: {'tabswitchid': tabswitchid, 'duration': duration}
+                    }])[0].fail(Notification.exception);
                 });
 
                 return true;

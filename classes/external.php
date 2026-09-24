@@ -444,6 +444,66 @@ class quizaccess_proctoring_external extends external_api {
     }
 
     /**
+     * Defines the parameters for updating a tab-switch violation's final duration.
+     *
+     * @return external_function_parameters
+     */
+    public static function update_tabswitch_duration_parameters() {
+        return new external_function_parameters(
+            [
+                'tabswitchid' => new external_value(PARAM_INT, 'tabswitch log id, from log_tabswitch'),
+                'duration' => new external_value(PARAM_INT, 'seconds spent away before returning'),
+            ]
+        );
+    }
+
+    /**
+     * Fills in the final duration of a tab-switch violation once the student returns.
+     *
+     * The violation row is created immediately when the student switches away (via
+     * log_tabswitch(), with duration=0 as a placeholder) so that the resulting id can
+     * be used right away to tag an in-the-moment webcam/screenshot capture. The final
+     * duration is only known once the student comes back, hence this separate update.
+     *
+     * @param int $tabswitchid The tabswitch log id to update.
+     * @param int $duration Seconds spent away before returning.
+     *
+     * @return array Returns an array with 'warnings'.
+     * @throws invalid_parameter_exception If one or more parameters are invalid.
+     */
+    public static function update_tabswitch_duration($tabswitchid, $duration) {
+        global $DB, $USER;
+
+        self::validate_parameters(
+            self::update_tabswitch_duration_parameters(),
+            [
+                'tabswitchid' => $tabswitchid,
+                'duration' => $duration,
+            ]
+        );
+
+        // Only allow a student to update their own violation row.
+        if ($DB->record_exists('quizaccess_proctoring_tabswitch_logs', ['id' => $tabswitchid, 'userid' => $USER->id])) {
+            $DB->set_field('quizaccess_proctoring_tabswitch_logs', 'duration', $duration, ['id' => $tabswitchid]);
+        }
+
+        return ['warnings' => []];
+    }
+
+    /**
+     * Return structure for updating a tab-switch violation's duration.
+     *
+     * @return external_single_structure
+     */
+    public static function update_tabswitch_duration_returns() {
+        return new external_single_structure(
+            [
+                'warnings' => new external_warnings(),
+            ]
+        );
+    }
+
+    /**
      * Adds a timestamp to the captured image.
      *
      * This function takes an image in raw data format, adds a timestamp in the
