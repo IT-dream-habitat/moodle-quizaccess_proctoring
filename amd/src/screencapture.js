@@ -251,10 +251,31 @@ define(['jquery', 'core/ajax', 'core/notification', 'core/str'],
              * @return {Promise}
              */
             captureNow(captureorigin, tabswitchid) {
-                if (!screenShareActive || !activeTakeScreenshot) {
-                    return Promise.resolve();
-                }
-                return activeTakeScreenshot(captureorigin, tabswitchid);
+                // A violation can land right as a fresh question page has just loaded (each
+                // question is a full page reload in Moodle's default quiz layout), while the
+                // student's screen-share grant from this page is still being (re-)established -
+                // giving up immediately in that split-second gap was producing violation rows
+                // with no capture at all. Briefly retry instead of failing outright. If the
+                // student simply hasn't clicked the share button/banner on this page at all,
+                // this just delays the inevitable no-op by a few seconds - harmless.
+                const maxwaitms = 5000;
+                const intervalms = 250;
+                let waited = 0;
+                return new Promise((resolve) => {
+                    const attempt = () => {
+                        if (screenShareActive && activeTakeScreenshot) {
+                            resolve(activeTakeScreenshot(captureorigin, tabswitchid));
+                            return;
+                        }
+                        waited += intervalms;
+                        if (waited >= maxwaitms) {
+                            resolve();
+                            return;
+                        }
+                        setTimeout(attempt, intervalms);
+                    };
+                    attempt();
+                });
             }
         };
     });

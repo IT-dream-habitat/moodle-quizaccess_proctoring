@@ -434,10 +434,29 @@ define(['jquery', 'core/ajax', 'core/notification', 'core/str'],
              * @return {Promise}
              */
             captureNow(captureorigin, tabswitchid) {
-                if (!isCameraAllowed || !activeTakePicture) {
-                    return Promise.resolve();
-                }
-                return activeTakePicture(captureorigin, tabswitchid);
+                // A violation can land right as a fresh question page has just loaded (each
+                // question is a full page reload in Moodle's default quiz layout), while the
+                // webcam is still silently reconnecting from the page's own setup() call -
+                // giving up immediately in that split-second gap was producing violation rows
+                // with no capture at all. Briefly retry instead of failing outright.
+                const maxwaitms = 5000;
+                const intervalms = 250;
+                let waited = 0;
+                return new Promise((resolve) => {
+                    const attempt = () => {
+                        if (isCameraAllowed && activeTakePicture) {
+                            resolve(activeTakePicture(captureorigin, tabswitchid));
+                            return;
+                        }
+                        waited += intervalms;
+                        if (waited >= maxwaitms) {
+                            resolve();
+                            return;
+                        }
+                        setTimeout(attempt, intervalms);
+                    };
+                    attempt();
+                });
             }
         };
     });
