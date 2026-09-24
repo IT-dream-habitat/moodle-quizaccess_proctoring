@@ -9,7 +9,14 @@ define(['core/ajax', 'core/notification', 'quizaccess_proctoring/proctoring', 'q
         // itself is actually hidden (switched away from, or covered by another app), which is a
         // much more reliable "did they actually leave the exam" signal.
         let pendingStart = null;
-        let pendingTabswitchId = null;
+        // Resolves to the server-assigned tabswitchid once log_tabswitch's AJAX round-trip
+        // completes. A plain shared variable written from inside that async callback is not
+        // safe here: if the student switches back to Moodle FASTER than the network round-trip
+        // (a real, observed case), the 'visible' handler would run before the id was ever
+        // assigned, silently losing the duration update. Chaining off this promise instead
+        // works correctly regardless of which side (the switch-back, or the server response)
+        // happens first.
+        let pendingIdPromise = null;
 
         return {
             /**
@@ -56,31 +63,44 @@ define(['core/ajax', 'core/notification', 'quizaccess_proctoring/proctoring', 'q
                             }
                         };
 
-                        Ajax.call([request])[0].done(function(res) {
-                            pendingTabswitchId = res.tabswitchid;
-                            Proctoring.captureNow('violation', pendingTabswitchId);
-                            ScreenCapture.captureNow('violation', pendingTabswitchId);
-                        }).fail(Notification.exception);
+                        pendingIdPromise = new Promise(function(resolve) {
+                            Ajax.call([request])[0].done(function(res) {
+                                const tabswitchid = res.tabswitchid;
+                                Proctoring.captureNow('violation', tabswitchid);
+                                ScreenCapture.captureNow('violation', tabswitchid);
+                                resolve(tabswitchid);
+                            }).fail(function(error) {
+                                Notification.exception(error);
+                                resolve(null);
+                            });
+                        });
                         return;
                     }
 
-                    // Returning to the tab: now the final duration is known, fill it in on the
-                    // violation row already created (and already tagged to its captures) above.
+                    // Returning to the tab: now the final duration is known. The violation id
+                    // may or may not have come back from the server yet - either way, capture
+                    // the duration now (while it's accurate) and the promise itself (before
+                    // clearing state), then apply the update once/whenever the id is ready.
                     if (pendingStart === null) {
                         return;
                     }
                     const duration = Math.max(0, Math.round((Date.now() - pendingStart) / 1000));
-                    const tabswitchid = pendingTabswitchId;
+                    const idPromise = pendingIdPromise;
                     pendingStart = null;
-                    pendingTabswitchId = null;
+                    pendingIdPromise = null;
 
-                    if (!tabswitchid) {
+                    if (!idPromise) {
                         return;
                     }
-                    Ajax.call([{
-                        methodname: 'quizaccess_proctoring_update_tabswitch_duration',
-                        args: {'tabswitchid': tabswitchid, 'duration': duration}
-                    }])[0].fail(Notification.exception);
+                    idPromise.then(function(tabswitchid) {
+                        if (!tabswitchid) {
+                            return;
+                        }
+                        Ajax.call([{
+                            methodname: 'quizaccess_proctoring_update_tabswitch_duration',
+                            args: {'tabswitchid': tabswitchid, 'duration': duration}
+                        }])[0].fail(Notification.exception);
+                    });
                 });
 
                 return true;
