@@ -90,7 +90,7 @@
                 <FIELD NAME="attemptid" TYPE="int" LENGTH="10" NOTNULL="true" UNSIGNED="false" DEFAULT="0" SEQUENCE="false"
                        COMMENT="Quiz attempt id" PREVIOUS="userid" NEXT="eventtype"/>
                 <FIELD NAME="eventtype" TYPE="char" LENGTH="20" NOTNULL="true" DEFAULT="blur" SEQUENCE="false"
-                       COMMENT="blur or visibilitychange" PREVIOUS="attemptid" NEXT="starttime"/>
+                       COMMENT="always visibilitychange currently; historical rows before this change may say blur" PREVIOUS="attemptid" NEXT="starttime"/>
                 <FIELD NAME="starttime" TYPE="int" LENGTH="10" NOTNULL="true" UNSIGNED="true" DEFAULT="0" SEQUENCE="false"
                        COMMENT="Epoch seconds when the student switched away" PREVIOUS="eventtype" NEXT="duration"/>
                 <FIELD NAME="duration" TYPE="int" LENGTH="10" NOTNULL="true" UNSIGNED="false" DEFAULT="0" SEQUENCE="false"
