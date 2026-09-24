@@ -17,6 +17,7 @@ define(['jquery', 'core/ajax', 'core/notification', 'core/str'],
                 {key: 'sharescreeninstructions', component: 'quizaccess_proctoring'},
                 {key: 'sharescreenwrongsurface', component: 'quizaccess_proctoring'},
                 {key: 'sharescreennotsupported', component: 'quizaccess_proctoring'},
+                {key: 'sharescreengoback', component: 'quizaccess_proctoring'},
             ];
             try {
                 const strings = await Str.get_strings(stringkeys);
@@ -30,6 +31,7 @@ define(['jquery', 'core/ajax', 'core/notification', 'core/str'],
                     sharescreeninstructions: strings[6],
                     sharescreenwrongsurface: strings[7],
                     sharescreennotsupported: strings[8],
+                    sharescreengoback: strings[9],
                 };
             } catch (error) {
                 Notification.exception(error);
@@ -117,9 +119,24 @@ define(['jquery', 'core/ajax', 'core/notification', 'core/str'],
                         <button type="button" class="btn btn-primary proctoring-screenshare-share">
                             ${strings.sharescreenbutton}
                         </button>
+                        <button type="button" class="btn btn-link proctoring-screenshare-goback">
+                            ${strings.sharescreengoback}
+                        </button>
                     </div>`;
                 const messageEl = overlay.querySelector('.proctoring-screenshare-message');
                 const shareBtn = overlay.querySelector('.proctoring-screenshare-share');
+                const gobackBtn = overlay.querySelector('.proctoring-screenshare-goback');
+
+                // A student who doesn't want to share their screen must still have a clean way
+                // out, rather than being trapped on a blocking overlay with no escape but
+                // closing the tab. This does not weaken the requirement - it's still impossible
+                // to proceed with the exam without sharing - it just makes leaving explicit.
+                // The attempt itself is simply abandoned in place, same as closing the tab would
+                // do; Moodle handles that state on its own (resumable later, or auto-submitted
+                // at the time limit, per the quiz's normal settings).
+                gobackBtn.addEventListener('click', function() {
+                    window.location.href = M.cfg.wwwroot + '/mod/quiz/view.php?id=' + props.quizid;
+                });
 
                 const showOverlay = function(message) {
                     messageEl.textContent = message || strings.sharescreeninstructions;

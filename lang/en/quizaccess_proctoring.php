@@ -261,6 +261,7 @@ $string['sharescreentitle'] = 'Screen sharing required for this exam';
 $string['sharescreeninstructions'] = 'This exam requires screen sharing to continue. When prompted, please choose "Entire Screen" (not a single window or tab) - you cannot proceed until this is granted.';
 $string['sharescreenwrongsurface'] = 'You shared a window or tab instead of your entire screen. Please share your Entire Screen to continue this exam.';
 $string['sharescreennotsupported'] = 'Your browser does not support screen sharing, which is required for this exam. Please switch to a supported browser (e.g. Chrome, Firefox or Edge) and reload this page, or contact your instructor.';
+$string['sharescreengoback'] = 'I don\'t want to share my screen - go back';
 $string['info:screenshareallowed'] = 'Your screen is now being shared.';
 $string['screenshareended'] = 'Screen sharing has stopped. You must share your screen again to continue this exam.';
 $string['warninglabel'] = 'Warnings';
