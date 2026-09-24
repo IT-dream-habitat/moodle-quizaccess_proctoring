@@ -1,5 +1,6 @@
-// Whether the student has an active screen-share stream. Screen capture is a soft
-// requirement: declining or stopping the share must never block the quiz attempt.
+// Whether the student currently has an active screen-share stream. Screen capture is a HARD
+// requirement, same as the webcam: the exam cannot proceed without it, and stopping the share
+// mid-exam re-blocks it until re-shared.
 let screenShareActive = false;
 let activeTakeScreenshot = null;
 
@@ -14,8 +15,8 @@ define(['jquery', 'core/ajax', 'core/notification', 'core/str'],
                 {key: 'sharescreenbutton', component: 'quizaccess_proctoring'},
                 {key: 'sharescreentitle', component: 'quizaccess_proctoring'},
                 {key: 'sharescreeninstructions', component: 'quizaccess_proctoring'},
-                {key: 'sharescreenskip', component: 'quizaccess_proctoring'},
                 {key: 'sharescreenwrongsurface', component: 'quizaccess_proctoring'},
+                {key: 'sharescreennotsupported', component: 'quizaccess_proctoring'},
             ];
             try {
                 const strings = await Str.get_strings(stringkeys);
@@ -27,8 +28,8 @@ define(['jquery', 'core/ajax', 'core/notification', 'core/str'],
                     sharescreenbutton: strings[4],
                     sharescreentitle: strings[5],
                     sharescreeninstructions: strings[6],
-                    sharescreenskip: strings[7],
-                    sharescreenwrongsurface: strings[8],
+                    sharescreenwrongsurface: strings[7],
+                    sharescreennotsupported: strings[8],
                 };
             } catch (error) {
                 Notification.exception(error);
@@ -40,9 +41,9 @@ define(['jquery', 'core/ajax', 'core/notification', 'core/str'],
             /**
              * Start periodic screen capture on the live quiz attempt page.
              *
-             * Screen capture is a soft requirement: if the student declines the browser's
-             * screen-share prompt, or later stops sharing, the attempt continues unaffected.
-             * The only effect is that periodic/violation screenshots stop being taken.
+             * Screen capture is a HARD requirement, same as the webcam: a full-screen overlay
+             * blocks the exam until the student grants "Entire Screen" sharing, and reappears
+             * if sharing is later stopped mid-exam.
              *
              * @param {Object} props courseid, quizid (cmid), id (pre-created screenshotlogid),
              *   image_width, screenshotdelay (ms).
@@ -58,11 +59,6 @@ define(['jquery', 'core/ajax', 'core/notification', 'core/str'],
                 }
                 if (document.getElementById("page-mod-quiz-review") !== null &&
                     document.getElementById("page-mod-quiz-review").innerHTML.length) {
-                    return false;
-                }
-
-                if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-                    // Not supported in this browser/webview: treat exactly like a decline.
                     return false;
                 }
 
@@ -108,39 +104,71 @@ define(['jquery', 'core/ajax', 'core/notification', 'core/str'],
 
                 let intervalhandle = null;
 
+                // The blocking overlay. Built once, shown whenever screen sharing is not
+                // currently active (first load, a failed/wrong-surface attempt, or after the
+                // student stops an active share mid-exam), removed only on a successful
+                // "Entire Screen" grant. There is no skip option: this is a hard requirement.
+                const overlay = document.createElement('div');
+                overlay.className = 'proctoring-screenshare-overlay';
+                overlay.innerHTML = `
+                    <div class="proctoring-screenshare-dialog">
+                        <h3>${strings.sharescreentitle}</h3>
+                        <p class="proctoring-screenshare-message">${strings.sharescreeninstructions}</p>
+                        <button type="button" class="btn btn-primary proctoring-screenshare-share">
+                            ${strings.sharescreenbutton}
+                        </button>
+                    </div>`;
+                const messageEl = overlay.querySelector('.proctoring-screenshare-message');
+                const shareBtn = overlay.querySelector('.proctoring-screenshare-share');
+
+                const showOverlay = function(message) {
+                    messageEl.textContent = message || strings.sharescreeninstructions;
+                    if (!overlay.isConnected) {
+                        document.body.appendChild(overlay);
+                    }
+                };
+                const hideOverlay = function() {
+                    if (overlay.isConnected) {
+                        overlay.remove();
+                    }
+                };
+
                 const requestShare = async function() {
+                    shareBtn.disabled = true;
                     try {
                         // displaySurface: 'monitor' hints the browser to default the picker
                         // towards "Entire Screen" rather than a single window/tab - it's only
                         // a preference the browser may use for its default selection, never a
-                        // guarantee, since the human always keeps the final choice.
+                        // guarantee, since the human always keeps the final choice. We still
+                        // verify what was actually granted below and reject anything else.
                         const stream = await navigator.mediaDevices.getDisplayMedia({
                             video: {displaySurface: 'monitor'}
                         });
-                        video.srcObject = stream;
-                        await video.play();
-                        screenShareActive = true;
 
                         // getSettings().displaySurface tells us what was ACTUALLY granted
                         // (Chromium-based browsers; not all browsers report it, in which case
-                        // this is silently skipped rather than risk a false warning). If the
-                        // student shared a single window or tab instead of the entire screen,
-                        // violation captures can only ever show that window/tab's own content -
-                        // never anything else they switch to - since browsers permanently lock
-                        // a tab/window-level share to that source. Tell them right away so they
-                        // can re-share correctly instead of silently getting useless captures.
+                        // we have no way to check and accept whatever was granted). A window or
+                        // tab share is permanently locked to that single source by browser
+                        // design - it can never show anything else the student switches to, so
+                        // it does not satisfy the requirement and must be re-requested.
                         const settings = stream.getVideoTracks()[0].getSettings();
                         if (settings.displaySurface && settings.displaySurface !== 'monitor') {
-                            Notification.addNotification({
-                                message: strings.sharescreenwrongsurface,
-                                type: 'warning'
-                            });
-                        } else {
-                            Notification.addNotification({
-                                message: strings.screenshareallowed,
-                                type: 'success'
-                            });
+                            stream.getVideoTracks()[0].stop();
+                            showOverlay(strings.sharescreenwrongsurface);
+                            shareBtn.disabled = false;
+                            return;
                         }
+
+                        video.srcObject = stream;
+                        await video.play();
+                        screenShareActive = true;
+                        hideOverlay();
+                        shareBtn.disabled = false;
+
+                        Notification.addNotification({
+                            message: strings.screenshareallowed,
+                            type: 'success'
+                        });
 
                         stream.getVideoTracks()[0].addEventListener('ended', function() {
                             screenShareActive = false;
@@ -151,93 +179,33 @@ define(['jquery', 'core/ajax', 'core/notification', 'core/str'],
                                 message: strings.screenshareended,
                                 type: 'warning'
                             });
+                            // Stopping mid-exam is treated the same as never having granted it:
+                            // re-block until the student shares again.
+                            showOverlay(strings.screenshareended);
                         });
 
                         setTimeout(takeScreenshot, 3000);
                         intervalhandle = setInterval(takeScreenshot, props.screenshotdelay);
                     } catch (error) {
-                        // Declined, dismissed, or otherwise unavailable: soft requirement, do
-                        // not block the attempt, just let the student know captures are off.
+                        // Declined or dismissed the picker: hard requirement, stay blocked and
+                        // let the student try again.
                         screenShareActive = false;
-                        Notification.addNotification({
-                            message: strings.sharescreenwarning,
-                            type: 'warning'
-                        });
+                        showOverlay(strings.sharescreenwarning);
+                        shareBtn.disabled = false;
                     }
                 };
 
-                // Each quiz question page is a full browser navigation in Moodle's default
-                // multi-page layout, which kills the live screen-share stream - there is no
-                // way to keep one MediaStream alive across a page load, and getDisplayMedia()
-                // always needs a fresh user gesture, so re-requesting on every page is
-                // unavoidable. What we CAN avoid is re-showing the full blocking overlay every
-                // single page once the student has already seen it once this attempt - track
-                // that in sessionStorage (survives navigation, scoped to this attempt/tab) and
-                // fall back to a small, unobtrusive corner button on later pages instead.
-                const storagekey = 'quizaccess_proctoring_screenshare_seen_' + (props.attemptid || 0);
-                let alreadyseen = false;
-                try {
-                    alreadyseen = sessionStorage.getItem(storagekey) === '1';
-                } catch (error) {
-                    alreadyseen = false;
+                shareBtn.addEventListener('click', requestShare);
+
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+                    // Not supported in this browser/webview at all: no amount of retrying will
+                    // help, so say so plainly instead of leaving a dead "Share" button.
+                    shareBtn.disabled = true;
+                    showOverlay(strings.sharescreennotsupported);
+                    return false;
                 }
-                const markseen = function() {
-                    try {
-                        sessionStorage.setItem(storagekey, '1');
-                    } catch (error) {
-                        // Storage unavailable (private browsing etc.) - just re-prompt fully
-                        // next page, no worse than before this change.
-                    }
-                };
 
-                if (alreadyseen) {
-                    const banner = document.createElement('div');
-                    banner.className = 'proctoring-screenshare-resume';
-                    const resumebutton = document.createElement('button');
-                    resumebutton.type = 'button';
-                    resumebutton.className = 'btn btn-primary btn-sm';
-                    resumebutton.textContent = strings.sharescreenbutton;
-                    banner.appendChild(resumebutton);
-                    document.body.appendChild(banner);
-
-                    resumebutton.addEventListener('click', async function() {
-                        banner.remove();
-                        await requestShare();
-                    }, {once: true});
-                } else {
-                    // getDisplayMedia() requires a genuine, direct user gesture in every major
-                    // browser - unlike getUserMedia(), it cannot be requested automatically
-                    // when the page loads (browsers silently refuse it with no prompt at all).
-                    // There is no way around that click, so make it as hard to miss as
-                    // possible on this first page. A "skip" option is required so the soft
-                    // requirement still holds - the student must always be able to continue
-                    // their attempt even if they never grant screen sharing.
-                    const overlay = document.createElement('div');
-                    overlay.className = 'proctoring-screenshare-overlay';
-                    overlay.innerHTML = `
-                        <div class="proctoring-screenshare-dialog">
-                            <h3>${strings.sharescreentitle}</h3>
-                            <p>${strings.sharescreeninstructions}</p>
-                            <button type="button" class="btn btn-primary proctoring-screenshare-share">
-                                ${strings.sharescreenbutton}
-                            </button>
-                            <button type="button" class="btn btn-link proctoring-screenshare-skip">
-                                ${strings.sharescreenskip}
-                            </button>
-                        </div>`;
-                    document.body.appendChild(overlay);
-
-                    overlay.querySelector('.proctoring-screenshare-skip').addEventListener('click', function() {
-                        markseen();
-                        overlay.remove();
-                    }, {once: true});
-
-                    overlay.querySelector('.proctoring-screenshare-share').addEventListener('click', async function() {
-                        markseen();
-                        overlay.remove();
-                        await requestShare();
-                    }, {once: true});
-                }
+                showOverlay();
 
                 return true;
             },
@@ -256,8 +224,8 @@ define(['jquery', 'core/ajax', 'core/notification', 'core/str'],
                 // student's screen-share grant from this page is still being (re-)established -
                 // giving up immediately in that split-second gap was producing violation rows
                 // with no capture at all. Briefly retry instead of failing outright. If the
-                // student simply hasn't clicked the share button/banner on this page at all,
-                // this just delays the inevitable no-op by a few seconds - harmless.
+                // student hasn't granted screen sharing at all (blocked on the overlay), this
+                // just delays the inevitable no-op by a few seconds - harmless.
                 const maxwaitms = 5000;
                 const intervalms = 250;
                 let waited = 0;
