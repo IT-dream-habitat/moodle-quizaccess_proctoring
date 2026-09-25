@@ -523,7 +523,6 @@ class quizaccess_proctoring_external extends external_api {
         ob_start();
         imagepng($image);
         $data = ob_get_clean();
-        ob_end_clean();
         imagedestroy($image);
         return $data;
     }
