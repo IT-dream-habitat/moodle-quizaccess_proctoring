@@ -71,36 +71,54 @@ define(['jquery', 'core/ajax', 'core/notification', 'core/str'],
                 const canvas = document.createElement('canvas');
 
                 const takeScreenshot = async(captureorigin, tabswitchid) => {
-                    if (!screenShareActive) {
-                        return;
+                    // video.videoWidth/videoHeight can briefly read 0 right as the shared
+                    // window/monitor loses OS focus or gets covered by another app (observed in
+                    // real testing: a tab-switch violation landed with the webcam captured fine
+                    // but the screenshot silently missing entirely, with no request ever reaching
+                    // the server - an uncaught exception from drawImage() on a not-yet-ready
+                    // frame, swallowed as an unhandled rejection since this function has no
+                    // caller-side catch). Treat "not ready" the same as "not active": signal
+                    // failure so captureNow()'s retry loop tries again instead of giving up after
+                    // a single attempt.
+                    if (!screenShareActive || !video.videoWidth || !video.videoHeight) {
+                        return false;
                     }
-                    const height = video.videoHeight / (video.videoWidth / width) || (width / (16 / 9));
-                    canvas.width = width;
-                    canvas.height = height;
-                    const context = canvas.getContext('2d');
-                    context.drawImage(video, 0, 0, width, height);
-                    const data = canvas.toDataURL('image/png');
 
-                    const request = {
-                        methodname: 'quizaccess_proctoring_send_screenshot',
-                        args: {
-                            'courseid': props.courseid,
-                            'screenshotlogid': props.id,
-                            'quizid': props.quizid,
-                            'screenshotpicture': data,
-                            'captureorigin': captureorigin || 'interval',
-                            'tabswitchid': tabswitchid || 0,
-                        }
-                    };
+                    try {
+                        const height = video.videoHeight / (video.videoWidth / width);
+                        canvas.width = width;
+                        canvas.height = height;
+                        const context = canvas.getContext('2d');
+                        context.drawImage(video, 0, 0, width, height);
+                        const data = canvas.toDataURL('image/png');
 
-                    Ajax.call([request])[0].done(function(res) {
-                        if (res.warnings.length >= 1) {
-                            Notification.addNotification({
-                                message: strings.wrongduringtakingscreencapture,
-                                type: 'error'
-                            });
-                        }
-                    }).fail(Notification.exception);
+                        const request = {
+                            methodname: 'quizaccess_proctoring_send_screenshot',
+                            args: {
+                                'courseid': props.courseid,
+                                'screenshotlogid': props.id,
+                                'quizid': props.quizid,
+                                'screenshotpicture': data,
+                                'captureorigin': captureorigin || 'interval',
+                                'tabswitchid': tabswitchid || 0,
+                            }
+                        };
+
+                        Ajax.call([request])[0].done(function(res) {
+                            if (res.warnings.length >= 1) {
+                                Notification.addNotification({
+                                    message: strings.wrongduringtakingscreencapture,
+                                    type: 'error'
+                                });
+                            }
+                        }).fail(Notification.exception);
+
+                        return true;
+                    } catch (error) {
+                        // eslint-disable-next-line no-console
+                        console.error('quizaccess_proctoring: screenshot capture failed, will retry', error);
+                        return false;
+                    }
                 };
                 activeTakeScreenshot = takeScreenshot;
 
@@ -274,10 +292,13 @@ define(['jquery', 'core/ajax', 'core/notification', 'core/str'],
                 const intervalms = 250;
                 let waited = 0;
                 return new Promise((resolve) => {
-                    const attempt = () => {
+                    const attempt = async() => {
                         if (screenShareActive && activeTakeScreenshot) {
-                            resolve(activeTakeScreenshot(captureorigin, tabswitchid));
-                            return;
+                            const captured = await activeTakeScreenshot(captureorigin, tabswitchid);
+                            if (captured) {
+                                resolve();
+                                return;
+                            }
                         }
                         waited += intervalms;
                         if (waited >= maxwaitms) {
