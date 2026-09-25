@@ -89,6 +89,7 @@ $string['notfoundtext'] = 'Not Found';
 $string['notpermissionreport'] = 'Proctoring reports are disabled for you.';
 $string['notrequired'] = 'Not required';
 $string['nousersfound'] = 'No users found';
+$string['coursenamequizname'] = 'Course / Quiz name';
 $string['numberofimages'] = 'Number of images';
 $string['openwebcam'] = 'Allow your webcam to continue';
 $string['photoalttext'] = 'The screen capture will appear in this box.';
