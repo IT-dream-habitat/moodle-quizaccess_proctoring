@@ -162,15 +162,42 @@ define(['jquery', 'core/ajax', 'core/notification', 'core/str'],
                             video: {displaySurface: 'monitor'}
                         });
 
-                        // getSettings().displaySurface tells us what was ACTUALLY granted
-                        // (Chromium-based browsers; not all browsers report it, in which case
-                        // we have no way to check and accept whatever was granted). A window or
-                        // tab share is permanently locked to that single source by browser
-                        // design - it can never show anything else the student switches to, so
-                        // it does not satisfy the requirement and must be re-requested.
-                        const settings = stream.getVideoTracks()[0].getSettings();
-                        if (settings.displaySurface && settings.displaySurface !== 'monitor') {
-                            stream.getVideoTracks()[0].stop();
+                        // getSettings().displaySurface tells us what was ACTUALLY granted, when
+                        // the browser reports it - support for this varies by browser AND by
+                        // exact version, so treat it as a bonus signal, not something to rely on
+                        // alone. A window or tab share is permanently locked to that single
+                        // source by browser design - it can never show anything else the student
+                        // switches to, so it does not satisfy the requirement.
+                        const track = stream.getVideoTracks()[0];
+                        const settings = track.getSettings();
+                        // eslint-disable-next-line no-console
+                        console.log('quizaccess_proctoring: getDisplayMedia settings', settings);
+
+                        let looksLikeEntireScreen = true;
+                        if (settings.displaySurface) {
+                            looksLikeEntireScreen = settings.displaySurface === 'monitor';
+                        } else {
+                            // Fallback heuristic for browsers that don't report displaySurface at
+                            // all: an entire-screen capture's resolution should closely match the
+                            // actual screen resolution; a window or tab is very unlikely to
+                            // coincidentally match it. Not foolproof (a maximized window could
+                            // still slip through), but meaningfully better than trusting whatever
+                            // was granted with no check at all.
+                            const dpr = window.devicePixelRatio || 1;
+                            const screenW = window.screen.width * dpr;
+                            const screenH = window.screen.height * dpr;
+                            const trackW = settings.width || 0;
+                            const trackH = settings.height || 0;
+                            looksLikeEntireScreen = screenW > 0 && screenH > 0 &&
+                                (trackW / screenW) > 0.9 && (trackH / screenH) > 0.85;
+                            // eslint-disable-next-line no-console
+                            console.log('quizaccess_proctoring: displaySurface not reported, ' +
+                                'falling back to resolution check', {trackW, trackH, screenW, screenH,
+                                    looksLikeEntireScreen});
+                        }
+
+                        if (!looksLikeEntireScreen) {
+                            track.stop();
                             showOverlay(strings.sharescreenwrongsurface);
                             shareBtn.disabled = false;
                             return;
@@ -187,7 +214,7 @@ define(['jquery', 'core/ajax', 'core/notification', 'core/str'],
                             type: 'success'
                         });
 
-                        stream.getVideoTracks()[0].addEventListener('ended', function() {
+                        track.addEventListener('ended', function() {
                             screenShareActive = false;
                             if (intervalhandle) {
                                 clearInterval(intervalhandle);
