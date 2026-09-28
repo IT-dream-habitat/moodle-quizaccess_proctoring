@@ -174,6 +174,7 @@ $string['proctoring_report'] = 'Proctoring report';
 $string['proctoringheader'] = '<strong>To continue with this quiz attempt you must open your webcam, and it will take some of your pictures randomly during the quiz.</strong>';
 $string['proctoringlabel'] = 'I agree with the validation process.';
 $string['proctoringrequired'] = 'Webcam identity validation';
+$string['proctoringsettingshdr'] = 'Proctoring for Moodle';
 $string['proctoringrequired_help'] = 'Enabling proctoring requires students to be monitored using webcam and screen recording during the quiz attempt.';
 $string['proctoringrequiredoption'] = 'Enable webcam capture by Proctoring';
 $string['screencapturerequiresonepage'] = 'Screen capture is enabled site-wide for this plugin, which requires this quiz to show all questions on one page. A screen-share grant cannot survive a page reload and must be re-requested from the student on every page, which in practice makes screen capture unreliable on multi-page quizzes. Please set this to "Never, all questions on one page" above.';

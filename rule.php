@@ -279,6 +279,15 @@ class quizaccess_proctoring extends quizaccess_proctoring_parent_class_alias {
      * @param MoodleQuickForm $mform The Moodle form wrapper.
      */
     public static function add_settings_form_fields($quizform, MoodleQuickForm $mform) {
+        // Open our own header so this setting gets its own clearly-labelled, independently
+        // collapsible section - without this, it silently lands inside whatever OTHER
+        // quizaccess_ plugin happens to run immediately before ours in this same
+        // add_settings_form_fields() loop (alphabetically: another installed plugin,
+        // "autoproctor", opens its own header first, and our field was landing inside that
+        // plugin's section instead of its own - real-world confusion this exists to prevent).
+        $mform->addElement('header', 'quizaccess_proctoringhdr',
+            get_string('proctoringsettingshdr', 'quizaccess_proctoring'));
+
         // Add the "Proctoring Required" dropdown.
         $mform->addElement(
             'select',
