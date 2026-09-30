@@ -457,7 +457,7 @@ class quizaccess_proctoring extends quizaccess_proctoring_parent_class_alias {
 
             // Retrieve screenshot delay and image width settings.
             $camshotdelay = (int)get_config('quizaccess_proctoring', 'autoreconfigurecamshotdelay') * 1000 ?: 30000;
-            $imagewidth = (int)get_config('quizaccess_proctoring', 'autoreconfigureimagewidth') ?: 230;
+            $imagewidth = (int)get_config('quizaccess_proctoring', 'autoreconfigureimagewidth') ?: 480;
 
             // Add additional data to the record.
             $quizurl = new moodle_url('/mod/quiz/view.php', ['id' => $cmid]);
@@ -481,7 +481,7 @@ class quizaccess_proctoring extends quizaccess_proctoring_parent_class_alias {
             // Screen capture is a soft requirement: declining or stopping it never blocks the attempt.
             if (get_config('quizaccess_proctoring', 'enablescreencapture')) {
                 $screenshotdelay = (int)get_config('quizaccess_proctoring', 'autoreconfigurescreenshotdelay') * 1000 ?: 30000;
-                $screenshotwidth = (int)get_config('quizaccess_proctoring', 'autoreconfigurescreenshotwidth') ?: 230;
+                $screenshotwidth = (int)get_config('quizaccess_proctoring', 'autoreconfigurescreenshotwidth') ?: 1280;
 
                 $screenshotrecord = (object)[
                     'courseid' => $COURSE->id,

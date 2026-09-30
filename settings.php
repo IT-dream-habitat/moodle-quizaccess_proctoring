@@ -78,7 +78,7 @@ if ($hassiteconfig) {
 
     $settings->add(new admin_setting_configtext('quizaccess_proctoring/autoreconfigureimagewidth',
         get_string('setting:camshotwidth', 'quizaccess_proctoring'),
-        get_string('setting:camshotwidth_desc', 'quizaccess_proctoring'), 230, PARAM_INT));
+        get_string('setting:camshotwidth_desc', 'quizaccess_proctoring'), 480, PARAM_INT));
 
     // Screen capture and tab-switch detection settings. Off by default: screen capture in particular
     // can record far more than the exam window, so enabling it is a policy decision for the institution.
@@ -98,7 +98,7 @@ if ($hassiteconfig) {
 
     $settings->add(new admin_setting_configtext('quizaccess_proctoring/autoreconfigurescreenshotwidth',
         get_string('setting:screenshotwidth', 'quizaccess_proctoring'),
-        get_string('setting:screenshotwidth_desc', 'quizaccess_proctoring'), 230, PARAM_INT));
+        get_string('setting:screenshotwidth_desc', 'quizaccess_proctoring'), 1280, PARAM_INT));
 
     $settings->add(new admin_setting_configcheckbox('quizaccess_proctoring/enabletabswitchdetection',
         get_string('setting:enabletabswitchdetection', 'quizaccess_proctoring'),
